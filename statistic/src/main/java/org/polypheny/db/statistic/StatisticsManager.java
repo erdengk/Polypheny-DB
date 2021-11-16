@@ -17,9 +17,12 @@
 package org.polypheny.db.statistic;
 
 
+import com.google.common.collect.ImmutableList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -27,6 +30,13 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.math.NumberUtils;
+import org.polypheny.db.catalog.Catalog;
+import org.polypheny.db.catalog.entity.CatalogTable;
+import org.polypheny.db.catalog.exceptions.GenericCatalogException;
+import org.polypheny.db.catalog.exceptions.UnknownDatabaseException;
+import org.polypheny.db.catalog.exceptions.UnknownSchemaException;
+import org.polypheny.db.catalog.exceptions.UnknownTableException;
+import org.polypheny.db.catalog.exceptions.UnknownUserException;
 import org.polypheny.db.config.Config;
 import org.polypheny.db.config.Config.ConfigListener;
 import org.polypheny.db.config.RuntimeConfig;
@@ -36,9 +46,27 @@ import org.polypheny.db.information.InformationGroup;
 import org.polypheny.db.information.InformationManager;
 import org.polypheny.db.information.InformationPage;
 import org.polypheny.db.information.InformationTable;
+import org.polypheny.db.plan.RelOptCluster;
+import org.polypheny.db.plan.RelOptTable;
+import org.polypheny.db.prepare.PolyphenyDbCatalogReader;
+import org.polypheny.db.prepare.Prepare.CatalogReader;
+import org.polypheny.db.rel.RelNode;
+import org.polypheny.db.rel.logical.LogicalAggregate;
+import org.polypheny.db.rel.logical.LogicalProject;
+import org.polypheny.db.rel.logical.LogicalTableScan;
+import org.polypheny.db.rel.logical.LogicalValues;
+import org.polypheny.db.rel.type.RelDataTypeField;
+import org.polypheny.db.rex.RexBuilder;
+import org.polypheny.db.rex.RexLiteral;
+import org.polypheny.db.tools.RelBuilder;
+import org.polypheny.db.transaction.PolyXid;
+import org.polypheny.db.transaction.Statement;
+import org.polypheny.db.transaction.Transaction;
+import org.polypheny.db.transaction.TransactionException;
 import org.polypheny.db.type.PolyType;
 import org.polypheny.db.type.PolyTypeFamily;
 import org.polypheny.db.util.DateTimeStringUtils;
+import org.polypheny.db.util.ImmutableBitSet;
 import org.polypheny.db.util.background.BackgroundTask.TaskPriority;
 import org.polypheny.db.util.background.BackgroundTask.TaskSchedulingType;
 import org.polypheny.db.util.background.BackgroundTaskManager;
@@ -66,12 +94,24 @@ public class StatisticsManager<T extends Comparable<T>> {
     @Getter
     private String revalId = null;
 
+    Map<PolyXid, Long> potentialInteresting;
+    Map<Long, List<RelNode>> insertedData;
+    Map<Long, List<RelNode>> deletedData;
+    Map<Long, List<RelNode>> updatedData;
+    ImmutableList<ImmutableList<RexLiteral>> columnInformation;
+    List<RelDataTypeField> fieldlist;
+
 
     private StatisticsManager() {
         this.statisticSchemaMap = new ConcurrentHashMap<>();
+        this.potentialInteresting = new HashMap<>();
         displayInformation();
         registerTaskTracking();
         registerIsFullTracking();
+
+        this.insertedData = new HashMap<>();
+        this.deletedData = new HashMap<>();
+        this.updatedData = new HashMap<>();
     }
 
 
@@ -178,7 +218,7 @@ public class StatisticsManager<T extends Comparable<T>> {
 
     private void resetAllIsFull() {
         this.statisticSchemaMap.values().forEach( s -> s.values().forEach( t -> t.values().forEach( c -> {
-            assignUnique( c, this.getUniqueValues( c.getQualifiedTableName(), c.getQualifiedColumnName() ) );
+            assignUnique( c, this.getUniqueValues( c.getQualifiedTableName(), c.getQualifiedColumnName(), c.getType() ) );
         } ) ) );
     }
 
@@ -194,6 +234,15 @@ public class StatisticsManager<T extends Comparable<T>> {
         }
 
         String[] splits = qualifiedTable.replace( "\"", "" ).split( "\\." );
+        if ( splits.length == 1 ) {
+            // default schema here
+            try {
+                splits = new String[]{ Catalog.getInstance().getDatabase( "APP" ).defaultSchemaName, splits[0] };
+            } catch ( UnknownDatabaseException e ) {
+                throw new RuntimeException( e );
+            }
+        }
+
         if ( splits.length != 2 ) {
             return;
         }
@@ -399,13 +448,66 @@ public class StatisticsManager<T extends Comparable<T>> {
     private StatisticQueryColumn getUniqueValues( QueryColumn column ) {
         String qualifiedTableName = StatisticQueryProcessor.buildQualifiedName( column.getSchema(), column.getTable() );
         String qualifiedColumnName = StatisticQueryProcessor.buildQualifiedName( column.getSchema(), column.getTable(), column.getName() );
-        return getUniqueValues( qualifiedTableName, qualifiedColumnName );
+        return getUniqueValues( qualifiedTableName, qualifiedColumnName, column.getType() );
     }
 
 
-    private StatisticQueryColumn getUniqueValues( String qualifiedTableName, String qualifiedColumnName ) {
-        String query = "SELECT " + qualifiedColumnName + " FROM " + qualifiedTableName + " GROUP BY " + qualifiedColumnName + getStatQueryLimit( 1 );
-        return this.sqlQueryInterface.selectOneStat( query );
+    private StatisticQueryColumn getUniqueValues( String qualifiedTableName, String qualifiedColumnName, PolyType polyType ) {
+
+        Transaction transaction = getTransaction();
+        Statement statement = transaction.createStatement();
+        PolyphenyDbCatalogReader reader = statement.getTransaction().getCatalogReader();
+        RelBuilder relBuilder = RelBuilder.create( statement );
+        final RexBuilder rexBuilder = relBuilder.getRexBuilder();
+        final RelOptCluster cluster = RelOptCluster.create( statement.getQueryProcessor().getPlanner(), rexBuilder );
+
+        LogicalTableScan tableScan = getLogicalTableScan( qualifiedTableName, reader, cluster );
+
+        RelNode relNode;
+        for ( int i = 0; i < tableScan.getRowType().getFieldNames().size(); i++ ) {
+            if ( tableScan.getRowType().getFieldNames().get( i ).equals( qualifiedColumnName.replaceAll( "\"", "" ).split( "\\." )[2] ) ) {
+
+                LogicalProject logicalProject = LogicalProject.create( tableScan, Collections.singletonList( rexBuilder.makeInputRef( tableScan, i ) ), Collections.singletonList( tableScan.getRowType().getFieldNames().get( i ) ) );
+
+                relNode = LogicalAggregate.create( logicalProject, ImmutableBitSet.of( 0 ), Collections.singletonList( ImmutableBitSet.of( 0 ) ), Collections.emptyList() );
+
+                return this.sqlQueryInterface.selectOneStatWithRel( relNode, transaction, statement );
+            }
+        }
+        return null;
+
+    }
+
+
+    private Transaction getTransaction() {
+        Transaction transaction = null;
+        try {
+            transaction = sqlQueryInterface.getTransactionManager().startTransaction( "pa", "APP", false, "Statistic Manager" );
+        } catch ( GenericCatalogException | UnknownUserException | UnknownDatabaseException | UnknownSchemaException e ) {
+            e.printStackTrace();
+        }
+        return transaction;
+    }
+
+
+    private void commitTransaction( Transaction transaction ) {
+        try {
+            transaction.commit();
+        } catch ( TransactionException e ) {
+            log.error( "Caught exception while executing a query from the console", e );
+            try {
+                transaction.rollback();
+            } catch ( TransactionException ex ) {
+                log.error( "Caught exception while rollback", e );
+            }
+        }
+    }
+
+
+    private LogicalTableScan getLogicalTableScan( String qualifiedTableName, CatalogReader reader, RelOptCluster cluster ) {
+        String[] tables = qualifiedTableName.replaceAll( "\"", "" ).split( "\\." );
+        RelOptTable table = reader.getTable( Arrays.asList( tables[0], tables[1] ) );
+        return LogicalTableScan.create( cluster, table );
     }
 
 
@@ -442,9 +544,12 @@ public class StatisticsManager<T extends Comparable<T>> {
     public void setSqlQueryInterface( StatisticQueryProcessor statisticQueryProcessor ) {
         this.sqlQueryInterface = statisticQueryProcessor;
 
+        /*
         if ( RuntimeConfig.STATISTICS_ON_STARTUP.getBoolean() ) {
             this.asyncReevaluateAllStatistics();
         }
+
+         */
     }
 
 
@@ -553,6 +658,61 @@ public class StatisticsManager<T extends Comparable<T>> {
 
     public void applyTable( String changedQualifiedTable ) {
         this.reevaluateTable( changedQualifiedTable );
+    }
+
+
+    public void changedTables( Transaction transaction, List<String> tableNames, Map<List<String>, List<RelNode>> inserted, Map<List<String>, List<RelNode>> deleted, Map<List<String>, List<RelNode>> updated ) {
+        if ( tableNames.size() > 1 ) {
+            try {
+                CatalogTable catalogTable = Catalog.getInstance().getTable( 1, tableNames.get( 0 ), tableNames.get( 1 ) );
+                long id = catalogTable.id;
+                insertedData.put( id, inserted.get( tableNames ) );
+                deletedData.put( id, deleted.get( tableNames ) );
+                updatedData.put( id, updated.get( tableNames ) );
+
+                potentialInteresting.put( transaction.getXid(), id );
+            } catch ( UnknownTableException e ) {
+                throw new RuntimeException( "Not possible to getTable to update which Tables were changed.", e );
+            }
+        }
+    }
+
+
+    public void updateCommittedXid( PolyXid xid ) {
+        if ( potentialInteresting.containsKey( xid ) ) {
+            updateStatistics( potentialInteresting.remove( xid ) );
+        }
+    }
+
+
+    private void updateStatistics( Long tableId ) {
+        if ( insertedData.containsKey( tableId ) ) {
+            List<RelNode> relNodes = insertedData.get( tableId );
+
+            for ( RelNode relNode : relNodes ) {
+                getDataTuples( relNode );
+            }
+
+
+        } else if ( deletedData.containsKey( tableId ) ) {
+
+        } else if ( updatedData.containsKey( tableId ) ) {
+
+        }
+    }
+
+
+    int count = 0;
+
+
+    private void getDataTuples( RelNode relNode ) {
+        if ( relNode instanceof LogicalValues ) {
+            columnInformation = ((LogicalValues) relNode).tuples;
+            fieldlist = relNode.getRowType().getFieldList();
+            System.out.println( "How often AM I here: " + count++ );
+        } else {
+            relNode.getInputs().forEach( this::getDataTuples );
+        }
     }
 
 

@@ -173,8 +173,13 @@ import org.polypheny.db.rel.RelNode;
 import org.polypheny.db.rel.RelRoot;
 import org.polypheny.db.rel.core.Sort;
 import org.polypheny.db.rel.type.RelDataType;
+import org.polypheny.db.sql.SqlDelete;
+import org.polypheny.db.sql.SqlInsert;
 import org.polypheny.db.sql.SqlKind;
 import org.polypheny.db.sql.SqlNode;
+import org.polypheny.db.sql.SqlUpdate;
+import org.polypheny.db.sql.ddl.SqlDropSchema;
+import org.polypheny.db.sql.ddl.SqlDropTable;
 import org.polypheny.db.statistic.StatisticsManager;
 import org.polypheny.db.transaction.Statement;
 import org.polypheny.db.transaction.Transaction;
@@ -1193,10 +1198,6 @@ public class Crud implements InformationObserver {
         builder.append( "DELETE FROM " ).append( tableId ).append( computeWherePK( t[0], t[1], request.data ) );
         try {
             int numOfRows = executeSqlUpdate( transaction, builder.toString() );
-            if ( isActiveTracking ) {
-                transaction.addChangedTable( tableId );
-            }
-
             transaction.commit();
             result = new Result( numOfRows );
         } catch ( TransactionException | Exception e ) {
@@ -1268,9 +1269,6 @@ public class Crud implements InformationObserver {
             int numOfRows = executeSqlUpdate( statement, transaction, builder.toString() );
 
             if ( numOfRows == 1 ) {
-                if ( isActiveTracking ) {
-                    transaction.addChangedTable( tableId );
-                }
                 transaction.commit();
                 result = new Result( numOfRows );
             } else {
@@ -3966,8 +3964,24 @@ public class Crud implements InformationObserver {
         SqlNode parsed = sqlProcessor.parse( sql );
         RelRoot logicalRoot = null;
         if ( parsed.isA( SqlKind.DDL ) ) {
+            if ( isActiveTracking ) {
+                if ( parsed instanceof SqlDropTable ) {
+                    statement.getTransaction().addChangedTable( ((SqlDropTable) parsed).getName().getSimple() );
+                } else if ( parsed instanceof SqlDropSchema ) {
+                    Catalog.getInstance().getTables( new Catalog.Pattern( databaseName ), new Catalog.Pattern( ((SqlDropSchema) parsed).getName().getSimple() ), null ).forEach( t -> statement.getTransaction().addChangedTable( t.getSchemaName() + "." + t.name ) );
+                }
+            }
             signature = sqlProcessor.prepareDdl( statement, parsed );
         } else {
+            if ( isActiveTracking ) {
+                if ( parsed instanceof SqlInsert ) {
+                    statement.getTransaction().addChangedTable( ((SqlInsert) parsed).getTargetTable().toString() );
+                } else if ( parsed instanceof SqlDelete ) {
+                    statement.getTransaction().addChangedTable( ((SqlDelete) parsed).getTargetTable().toString() );
+                } else if ( parsed instanceof SqlUpdate ) {
+                    statement.getTransaction().addChangedTable( ((SqlUpdate) parsed).getTargetTable().toString() );
+                }
+            }
             Pair<SqlNode, RelDataType> validated = sqlProcessor.validate( statement.getTransaction(), parsed, RuntimeConfig.ADD_DEFAULT_VALUES_IN_INSERTS.getBoolean() );
             logicalRoot = sqlProcessor.translate( statement, validated.left );
             signature = statement.getQueryProcessor().prepareQuery( logicalRoot );

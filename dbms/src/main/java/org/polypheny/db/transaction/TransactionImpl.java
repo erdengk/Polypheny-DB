@@ -183,6 +183,7 @@ public class TransactionImpl implements Transaction, Comparable {
 
         // Handover information about commit to Materialized Manager
         MaterializedViewManager.getInstance().updateCommittedXid( xid );
+        //StatisticsManager.getInstance().updateCommittedXid( xid );
     }
 
 

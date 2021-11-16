@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.calcite.avatica.ColumnMetaData;
 import org.apache.calcite.avatica.MetaImpl;
@@ -42,6 +43,7 @@ import org.polypheny.db.jdbc.PolyphenyDbSignature;
 import org.polypheny.db.monitoring.core.MonitoringServiceProvider;
 import org.polypheny.db.monitoring.events.QueryEvent;
 import org.polypheny.db.processing.SqlProcessor;
+import org.polypheny.db.rel.RelNode;
 import org.polypheny.db.rel.RelRoot;
 import org.polypheny.db.rel.type.RelDataType;
 import org.polypheny.db.sql.SqlKind;
@@ -59,10 +61,11 @@ import org.polypheny.db.util.Pair;
 @Slf4j
 public class StatisticQueryProcessor {
 
+    @Getter
     private final TransactionManager transactionManager;
     private final String databaseName;
     private final String userName;
-    private final Catalog catalog = Catalog.getInstance();
+    //private final Catalog catalog = Catalog.getInstance();
 
 
     /**
@@ -96,6 +99,15 @@ public class StatisticQueryProcessor {
     }
 
 
+    public StatisticQueryColumn selectOneStatWithRel( RelNode relNode, Transaction transaction, Statement statement ) {
+        StatisticResult res = this.executeRel( relNode, transaction, statement );
+        if ( res.getColumns() != null && res.getColumns().length == 1 ) {
+            return res.getColumns()[0];
+        }
+        return null;
+    }
+
+
     /**
      * Handles the request which retrieves the stats for multiple columns
      */
@@ -108,6 +120,7 @@ public class StatisticQueryProcessor {
      * Method to get all schemas, tables, and their columns in a database
      */
     public List<List<String>> getSchemaTree() {
+        Catalog catalog = Catalog.getInstance();
         List<List<String>> result = new ArrayList<>();
         List<String> schemaTree = new ArrayList<>();
         List<CatalogSchema> schemas = catalog.getSchemas( new Pattern( databaseName ), null );
@@ -137,6 +150,7 @@ public class StatisticQueryProcessor {
      * @return all the columns
      */
     public List<QueryColumn> getAllColumns() {
+        Catalog catalog = Catalog.getInstance();
         List<QueryColumn> columns = new ArrayList<>();
 
         List<CatalogColumn> catalogColumns = catalog.getColumns( new Pattern( databaseName ), null, null, null );
@@ -163,6 +177,7 @@ public class StatisticQueryProcessor {
      * @return all columns
      */
     public List<QueryColumn> getAllColumns( String schemaName, String tableName ) {
+        Catalog catalog = Catalog.getInstance();
 
         List<QueryColumn> columns = new ArrayList<>();
 
@@ -188,6 +203,7 @@ public class StatisticQueryProcessor {
      * Method to get the type of a specific column
      */
     public PolyType getColumnType( String schema, String table, String column ) {
+        Catalog catalog = Catalog.getInstance();
         PolyType type = null;
 
         try {
@@ -196,6 +212,26 @@ public class StatisticQueryProcessor {
             log.error( "Caught exception", e );
         }
         return type;
+    }
+
+
+    private StatisticResult executeRel( RelNode relNode, Transaction transaction, Statement statement ) {
+
+        StatisticResult result = new StatisticResult();
+
+        try {
+            result = executeRel( statement, relNode );
+            transaction.commit();
+        } catch ( TransactionException | QueryExecutionException e ) {
+            log.error( "Caught exception while executing a query from the console", e );
+            try {
+                transaction.rollback();
+            } catch ( TransactionException ex ) {
+                log.error( "Caught exception while rollback", e );
+            }
+        }
+
+        return result;
     }
 
 
@@ -230,6 +266,78 @@ public class StatisticQueryProcessor {
     // -----------------------------------------------------------------------
     //                                Helper
     // -----------------------------------------------------------------------
+
+
+    private StatisticResult executeRel( Statement statement, RelNode relNode ) throws QueryExecutionException {
+        PolyphenyDbSignature signature;
+        List<List<Object>> rows;
+        Iterator<Object> iterator = null;
+
+        statement.getTransaction().setMonitoringData( new QueryEvent() );
+
+        try {
+            signature = statement.getQueryProcessor().prepareQuery( RelRoot.of( relNode, SqlKind.SELECT ), relNode.getRowType(), false );
+            final Enumerable enumerable = signature.enumerable( statement.getDataContext() );
+            //noinspection unchecked
+
+            iterator = enumerable.iterator();
+
+            rows = MetaImpl.collect( signature.cursorFactory, LimitIterator.of( iterator, getPageSize() ), new ArrayList<>() );
+
+        } catch ( Throwable t ) {
+            if ( iterator != null ) {
+                try {
+                    if ( iterator instanceof AutoCloseable ) {
+                        ((AutoCloseable) iterator).close();
+                    }
+                } catch ( Exception e ) {
+                    log.error( "Exception while closing result iterator", e );
+                }
+            }
+            throw new QueryExecutionException( t );
+        }
+
+        try {
+            List<PolyType> types = new ArrayList<>();
+            List<String> names = new ArrayList<>();
+            for ( ColumnMetaData metaData : signature.columns ) {
+
+                types.add( PolyType.get( metaData.type.name ) );
+                names.add( metaData.schemaName + "." + metaData.tableName + "." + metaData.columnName );
+            }
+
+            List<String[]> data = new ArrayList<>();
+            for ( List<Object> row : rows ) {
+                String[] temp = new String[row.size()];
+                int counter = 0;
+                for ( Object o : row ) {
+                    if ( o == null ) {
+                        temp[counter] = null;
+                    } else {
+                        temp[counter] = o.toString();
+                    }
+                    counter++;
+                }
+                data.add( temp );
+            }
+
+            String[][] d = data.toArray( new String[0][] );
+
+            statement.getTransaction().getMonitoringData().setRowCount( data.size() );
+            MonitoringServiceProvider.getInstance().monitorEvent( statement.getTransaction().getMonitoringData() );
+
+            return new StatisticResult( names, types, d );
+        } finally {
+            try {
+                if ( iterator instanceof AutoCloseable ) {
+                    ((AutoCloseable) iterator).close();
+                }
+            } catch ( Exception e ) {
+                log.error( "Exception while closing result iterator2", e );
+            }
+        }
+
+    }
 
 
     private StatisticResult executeSqlSelect( final Statement statement, final String sqlSelect ) throws QueryExecutionException {

@@ -226,6 +226,11 @@ public class PolyphenyDb {
         // Initialize MaterializedViewManager
         MaterializedViewManager.setAndGetInstance( new MaterializedViewManagerImpl( transactionManager ) );
 
+        // Create internal query interfaces
+        final StatisticQueryProcessor statisticQueryProcessor = new StatisticQueryProcessor( transactionManager, authenticator );
+        StatisticsManager<?> statisticsManager = StatisticsManager.getInstance();
+        statisticsManager.setSqlQueryInterface( statisticQueryProcessor );
+
         // Startup and restore catalog
         Catalog catalog;
         Transaction trx = null;
@@ -273,10 +278,7 @@ public class PolyphenyDb {
             log.warn( "Interrupted on join()", e );
         }
 
-        // Create internal query interfaces
-        final StatisticQueryProcessor statisticQueryProcessor = new StatisticQueryProcessor( transactionManager, authenticator );
-        StatisticsManager<?> statisticsManager = StatisticsManager.getInstance();
-        statisticsManager.setSqlQueryInterface( statisticQueryProcessor );
+        statisticsManager.asyncReevaluateAllStatistics();
 
         // Initialize index manager
         try {

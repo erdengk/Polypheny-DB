@@ -17,6 +17,7 @@
 package org.polypheny.db.view;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.Getter;
@@ -88,6 +89,15 @@ public abstract class MaterializedViewManager {
         @Getter
         private final List<String> names = new ArrayList<>();
 
+        @Getter
+        Map<List<String>, List<RelNode>> insertedData = new HashMap<>();
+
+        @Getter
+        Map<List<String>, List<RelNode>> deletedData = new HashMap<>();
+
+        @Getter
+        Map<List<String>, List<RelNode>> updatedData = new HashMap<>();
+
 
         @Override
         public RelNode visit( RelNode other ) {
@@ -100,6 +110,15 @@ public abstract class MaterializedViewManager {
                             names.add( ((LogicalTable) other.getTable().getTable()).getLogicalTableName() );
                         } else {
                             names.addAll( qualifiedName );
+                        }
+                        if ( ((TableModify) other).getOperation() == Operation.INSERT ) {
+                            insertedData.put( names, other.getInputs() );
+                        }
+                        if ( ((TableModify) other).getOperation() == Operation.DELETE ) {
+                            deletedData.put( names, other.getInputs() );
+                        }
+                        if ( ((TableModify) other).getOperation() == Operation.UPDATE ) {
+                            updatedData.put( names, other.getInputs() );
                         }
                     }
                 }

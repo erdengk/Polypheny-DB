@@ -222,6 +222,7 @@ public abstract class AbstractQueryProcessor implements QueryProcessor {
         TableUpdateVisitor visitor = new TableUpdateVisitor();
         logicalRoot.rel.accept( visitor );
         MaterializedViewManager.getInstance().addTables( statement.getTransaction(), visitor.getNames() );
+        //StatisticsManager.getInstance().changedTables( statement.getTransaction(), visitor.getNames(), visitor.getInsertedData(), visitor.getDeletedData(), visitor.getUpdatedData() );
 
         SchemaTypeVisitor schemaTypeVisitor = new SchemaTypeVisitor();
         logicalRoot.rel.accept( schemaTypeVisitor );

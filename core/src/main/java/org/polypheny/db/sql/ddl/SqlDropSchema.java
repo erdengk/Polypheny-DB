@@ -38,6 +38,7 @@ import static org.polypheny.db.util.Static.RESOURCE;
 
 import com.google.common.collect.ImmutableList;
 import java.util.List;
+import lombok.Getter;
 import org.polypheny.db.ddl.DdlManager;
 import org.polypheny.db.ddl.exception.DdlOnSourceException;
 import org.polypheny.db.ddl.exception.SchemaNotExistException;
@@ -60,6 +61,7 @@ import org.polypheny.db.transaction.Statement;
  */
 public class SqlDropSchema extends SqlDrop implements SqlExecutableStatement {
 
+    @Getter
     private final SqlIdentifier name;
 
     private static final SqlOperator OPERATOR = new SqlSpecialOperator( "DROP SCHEMA", SqlKind.DROP_TABLE );
