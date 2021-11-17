@@ -18,6 +18,7 @@ package org.polypheny.db.statistic;
 
 
 import com.google.common.collect.ImmutableList;
+import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -50,14 +51,19 @@ import org.polypheny.db.plan.RelOptCluster;
 import org.polypheny.db.plan.RelOptTable;
 import org.polypheny.db.prepare.PolyphenyDbCatalogReader;
 import org.polypheny.db.prepare.Prepare.CatalogReader;
+import org.polypheny.db.rel.RelCollations;
 import org.polypheny.db.rel.RelNode;
+import org.polypheny.db.rel.core.AggregateCall;
 import org.polypheny.db.rel.logical.LogicalAggregate;
 import org.polypheny.db.rel.logical.LogicalProject;
+import org.polypheny.db.rel.logical.LogicalSort;
 import org.polypheny.db.rel.logical.LogicalTableScan;
 import org.polypheny.db.rel.logical.LogicalValues;
 import org.polypheny.db.rel.type.RelDataTypeField;
 import org.polypheny.db.rex.RexBuilder;
 import org.polypheny.db.rex.RexLiteral;
+import org.polypheny.db.sql.SqlAggFunction;
+import org.polypheny.db.sql.fun.SqlStdOperatorTable;
 import org.polypheny.db.tools.RelBuilder;
 import org.polypheny.db.transaction.PolyXid;
 import org.polypheny.db.transaction.Statement;
@@ -67,6 +73,7 @@ import org.polypheny.db.type.PolyType;
 import org.polypheny.db.type.PolyTypeFamily;
 import org.polypheny.db.util.DateTimeStringUtils;
 import org.polypheny.db.util.ImmutableBitSet;
+import org.polypheny.db.util.Pair;
 import org.polypheny.db.util.background.BackgroundTask.TaskPriority;
 import org.polypheny.db.util.background.BackgroundTask.TaskSchedulingType;
 import org.polypheny.db.util.background.BackgroundTaskManager;
@@ -425,7 +432,7 @@ public class StatisticsManager<T extends Comparable<T>> {
      * @return a StatQueryColumn which contains the requested value
      */
     private StatisticQueryColumn getAggregateColumn( QueryColumn column, String aggregate ) {
-        return getAggregateColumn( column.getSchema(), column.getTable(), column.getName(), aggregate );
+        return getAggregateColumn( column.getSchema(), column.getTable(), column.getName(), aggregate, column );
     }
 
 
@@ -434,9 +441,44 @@ public class StatisticsManager<T extends Comparable<T>> {
      *
      * @param aggregate the aggregate function to us
      */
-    private StatisticQueryColumn getAggregateColumn( String schema, String table, String column, String aggregate ) {
-        String query = "SELECT " + aggregate + " (" + StatisticQueryProcessor.buildQualifiedName( schema, table, column ) + ") FROM " + StatisticQueryProcessor.buildQualifiedName( schema, table ) + getStatQueryLimit();
+    private StatisticQueryColumn getAggregateColumn( String schema, String table, String column, String aggregate, QueryColumn queryColumn ) {
+
+        Transaction transaction = getTransaction();
+        Statement statement = transaction.createStatement();
+        PolyphenyDbCatalogReader reader = statement.getTransaction().getCatalogReader();
+        RelBuilder relBuilder = RelBuilder.create( statement );
+        final RexBuilder rexBuilder = relBuilder.getRexBuilder();
+        final RelOptCluster cluster = RelOptCluster.create( statement.getQueryProcessor().getPlanner(), rexBuilder );
+
+        LogicalTableScan tableScan = getLogicalTableScan( StatisticQueryProcessor.buildQualifiedName( queryColumn.getSchema(), queryColumn.getTable() ), reader, cluster );
+
+        for ( int i = 0; i < tableScan.getRowType().getFieldNames().size(); i++ ) {
+            if ( tableScan.getRowType().getFieldNames().get( i ).equals( StatisticQueryProcessor.buildQualifiedName( queryColumn.getSchema(), queryColumn.getTable(), queryColumn.getName() ).replaceAll( "\"", "" ).split( "\\." )[2] ) ) {
+                LogicalProject logicalProject = LogicalProject.create( tableScan, Collections.singletonList( rexBuilder.makeInputRef( tableScan, i ) ), Collections.singletonList( tableScan.getRowType().getFieldNames().get( i ) ) );
+                SqlAggFunction operator = null;
+                if ( aggregate.equals( "MAX" ) ) {
+                    operator = SqlStdOperatorTable.MAX;
+                } else if ( aggregate.equals( "MIN" ) ) {
+                    operator = SqlStdOperatorTable.MIN;
+                } else {
+                    throw new RuntimeException( "Unknown aggregate is used in Statistic Manager." );
+                }
+
+                AggregateCall aggregateCall = AggregateCall.create( operator, false, false, Collections.singletonList( 0 ), -1, RelCollations.EMPTY, cluster.getTypeFactory().createTypeWithNullability( cluster.getTypeFactory().createPolyType( logicalProject.getRowType().getFieldList().get( 0 ).getType().getPolyType() ), true ), "min-max" );
+
+                RelNode relNode = LogicalAggregate.create( logicalProject, ImmutableBitSet.of(), Collections.singletonList( ImmutableBitSet.of() ), Collections.singletonList( aggregateCall ) );
+
+                return this.sqlQueryInterface.selectOneStatWithRel( relNode, transaction, statement );
+
+            }
+        }
+
+        return null;
+        /*
+        String query = "SELECT " + aggregate + " (" + StatisticQueryProcessor.buildQualifiedName( schema, table, column ) + ") FROM " + StatisticQueryProcessor.buildQualifiedName( schema, table );
         return this.sqlQueryInterface.selectOneStat( query );
+
+         */
     }
 
 
@@ -466,16 +508,25 @@ public class StatisticsManager<T extends Comparable<T>> {
         RelNode relNode;
         for ( int i = 0; i < tableScan.getRowType().getFieldNames().size(); i++ ) {
             if ( tableScan.getRowType().getFieldNames().get( i ).equals( qualifiedColumnName.replaceAll( "\"", "" ).split( "\\." )[2] ) ) {
-
                 LogicalProject logicalProject = LogicalProject.create( tableScan, Collections.singletonList( rexBuilder.makeInputRef( tableScan, i ) ), Collections.singletonList( tableScan.getRowType().getFieldNames().get( i ) ) );
 
-                relNode = LogicalAggregate.create( logicalProject, ImmutableBitSet.of( 0 ), Collections.singletonList( ImmutableBitSet.of( 0 ) ), Collections.emptyList() );
+                LogicalAggregate logicalAggregate = LogicalAggregate.create( logicalProject, ImmutableBitSet.of( 0 ), Collections.singletonList( ImmutableBitSet.of( 0 ) ), Collections.emptyList() );
+
+                Pair<BigDecimal, PolyType> valuePair = new Pair<>( new BigDecimal( (int) 6 ), PolyType.DECIMAL );
+
+                relNode = LogicalSort.create( logicalAggregate, RelCollations.of(), null, new RexLiteral( valuePair.left, rexBuilder.makeInputRef( tableScan, i ).getType(), valuePair.right ) );
 
                 return this.sqlQueryInterface.selectOneStatWithRel( relNode, transaction, statement );
             }
         }
         return null;
 
+ /*
+
+        String query = "SELECT " + qualifiedColumnName + " FROM " + qualifiedTableName + " GROUP BY " + qualifiedColumnName + getStatQueryLimit( 1 );
+        return this.sqlQueryInterface.selectOneStat( query );
+
+  */
     }
 
 
@@ -517,8 +568,42 @@ public class StatisticsManager<T extends Comparable<T>> {
     private Integer getCount( QueryColumn column ) {
         String tableName = StatisticQueryProcessor.buildQualifiedName( column.getSchema(), column.getTable() );
         String columnName = StatisticQueryProcessor.buildQualifiedName( column.getSchema(), column.getTable(), column.getName() );
+
+        Transaction transaction = getTransaction();
+        Statement statement = transaction.createStatement();
+        PolyphenyDbCatalogReader reader = statement.getTransaction().getCatalogReader();
+        RelBuilder relBuilder = RelBuilder.create( statement );
+        final RexBuilder rexBuilder = relBuilder.getRexBuilder();
+        final RelOptCluster cluster = RelOptCluster.create( statement.getQueryProcessor().getPlanner(), rexBuilder );
+
+        LogicalTableScan tableScan = getLogicalTableScan( tableName, reader, cluster );
+
+        for ( int i = 0; i < tableScan.getRowType().getFieldNames().size(); i++ ) {
+            if ( tableScan.getRowType().getFieldNames().get( i ).equals( columnName.replaceAll( "\"", "" ).split( "\\." )[2] ) ) {
+                LogicalProject logicalProject = LogicalProject.create( tableScan, Collections.singletonList( rexBuilder.makeInputRef( tableScan, i ) ), Collections.singletonList( tableScan.getRowType().getFieldNames().get( i ) ) );
+
+                AggregateCall aggregateCall = AggregateCall.create( SqlStdOperatorTable.COUNT, false, false, Collections.singletonList( 0 ), -1, RelCollations.EMPTY, cluster.getTypeFactory().createTypeWithNullability( cluster.getTypeFactory().createPolyType( PolyType.BIGINT ), false ), "min-max" );
+
+                RelNode relNode = LogicalAggregate.create( logicalProject, ImmutableBitSet.of(), Collections.singletonList( ImmutableBitSet.of() ), Collections.singletonList( aggregateCall ) );
+
+                StatisticQueryColumn res = this.sqlQueryInterface.selectOneStatWithRel( relNode, transaction, statement );
+
+                if ( res != null && res.getData() != null && res.getData().length != 0 ) {
+                    try {
+                        return Integer.parseInt( res.getData()[0] );
+                    } catch ( NumberFormatException e ) {
+                        log.error( "Count could not be parsed for column {}.", column.getQualifiedColumnName(), e );
+                    }
+                }
+
+            }
+        }
+
+
+ /*
         String query = "SELECT COUNT(" + columnName + ") FROM " + tableName;
         StatisticQueryColumn res = this.sqlQueryInterface.selectOneStat( query );
+
 
         if ( res != null && res.getData() != null && res.getData().length != 0 ) {
             try {
@@ -527,6 +612,9 @@ public class StatisticsManager<T extends Comparable<T>> {
                 log.error( "Count could not be parsed for column {}.", column.getQualifiedColumnName(), e );
             }
         }
+
+
+  */
         return 0;
     }
 
