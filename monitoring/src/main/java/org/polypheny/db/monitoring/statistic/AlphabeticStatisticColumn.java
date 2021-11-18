@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2020 The Polypheny Project
+ * Copyright 2019-2021 The Polypheny Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,12 +14,10 @@
  * limitations under the License.
  */
 
-package org.polypheny.db.statistic;
+package org.polypheny.db.monitoring.statistic;
 
 
 import com.google.gson.annotations.Expose;
-import lombok.Getter;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.polypheny.db.config.RuntimeConfig;
 import org.polypheny.db.type.PolyType;
@@ -30,29 +28,19 @@ import org.polypheny.db.type.PolyType;
  * Responsible to validate if data should be changed
  */
 @Slf4j
-public class NumericalStatisticColumn<T extends Comparable<T>> extends StatisticColumn<T> {
+public class AlphabeticStatisticColumn<T extends Comparable<T>> extends StatisticColumn<T> {
 
     @Expose
-    private final String columnType = "numeric";
-
-    @Expose
-    @Getter
-    @Setter
-    private T min;
-
-    @Expose
-    @Getter
-    @Setter
-    private T max;
+    private final String columnType = "alphabetic";
 
 
-    public NumericalStatisticColumn( String schema, String table, String column, PolyType type ) {
+    public AlphabeticStatisticColumn( String schema, String table, String column, PolyType type ) {
         super( schema, table, column, type );
     }
 
 
-    public NumericalStatisticColumn( String[] splitColumn, PolyType type ) {
-        super( splitColumn, type );
+    public AlphabeticStatisticColumn( String[] splitColumn, PolyType type ) {
+        super( splitColumn[0], splitColumn[1], splitColumn[2], type );
     }
 
 
@@ -65,22 +53,12 @@ public class NumericalStatisticColumn<T extends Comparable<T>> extends Statistic
         } else {
             isFull = true;
         }
-        if ( min == null ) {
-            min = val;
-            max = val;
-        } else if ( val.compareTo( min ) < 0 ) {
-            this.min = val;
-        } else if ( val.compareTo( max ) > 0 ) {
-            this.max = val;
-        }
     }
 
 
     @Override
     public String toString() {
         String statistics = "";
-        statistics += "min: " + min;
-        statistics += "max: " + max;
         statistics += "count: " + count;
         statistics += "unique Value: " + uniqueValues.toString();
         return statistics;
