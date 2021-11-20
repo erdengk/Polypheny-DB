@@ -31,9 +31,10 @@ class MonitoringQueueImplTest {
     public void ctor_validParameters_instanceNotNull() {
         // arrange
         val repo = Mockito.mock( MonitoringRepository.class );
+        val statisitcRepo = Mockito.mock( MonitoringRepository.class );
 
         // act
-        val sut = new MonitoringQueueImpl( false, repo );
+        val sut = new MonitoringQueueImpl( false, repo, statisitcRepo );
 
         // assert
         Assertions.assertNotNull( sut );
@@ -44,7 +45,8 @@ class MonitoringQueueImplTest {
     public void queueEvent_validEvent_QueueConsistsElements() {
         // arrange
         val repo = Mockito.mock( MonitoringRepository.class );
-        val sut = new MonitoringQueueImpl( false, repo );
+        val statisitcRepo = Mockito.mock( MonitoringRepository.class );
+        val sut = new MonitoringQueueImpl( false, repo, statisitcRepo );
         val event = Mockito.mock( MonitoringEvent.class );
 
         // act
@@ -60,7 +62,8 @@ class MonitoringQueueImplTest {
     public void queueEvent_validEvent2Times_QueueConsistsElementOnce() {
         // arrange
         val repo = Mockito.mock( MonitoringRepository.class );
-        val sut = new MonitoringQueueImpl( false, repo );
+        val statisitcRepo = Mockito.mock( MonitoringRepository.class );
+        val sut = new MonitoringQueueImpl( false, repo, statisitcRepo );
         val event = new QueryEvent();
 
         // act
@@ -77,7 +80,8 @@ class MonitoringQueueImplTest {
     public void queueEvent_validEvents_QueueConsistsElements() {
         // arrange
         val repo = Mockito.mock( MonitoringRepository.class );
-        val sut = new MonitoringQueueImpl( false, repo );
+        val statisitcRepo = Mockito.mock( MonitoringRepository.class );
+        val sut = new MonitoringQueueImpl( false, repo, statisitcRepo );
         val numberOfEvents = 100L;
 
         // act

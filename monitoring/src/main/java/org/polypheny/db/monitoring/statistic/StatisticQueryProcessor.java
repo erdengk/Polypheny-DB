@@ -42,12 +42,9 @@ import org.polypheny.db.iface.Authenticator;
 import org.polypheny.db.jdbc.PolyphenyDbSignature;
 import org.polypheny.db.monitoring.core.MonitoringServiceProvider;
 import org.polypheny.db.monitoring.events.QueryEvent;
-import org.polypheny.db.processing.SqlProcessor;
 import org.polypheny.db.rel.RelNode;
 import org.polypheny.db.rel.RelRoot;
-import org.polypheny.db.rel.type.RelDataType;
 import org.polypheny.db.sql.SqlKind;
-import org.polypheny.db.sql.SqlNode;
 import org.polypheny.db.transaction.Statement;
 import org.polypheny.db.transaction.Transaction;
 import org.polypheny.db.transaction.Transaction.MultimediaFlavor;
@@ -55,7 +52,6 @@ import org.polypheny.db.transaction.TransactionException;
 import org.polypheny.db.transaction.TransactionManager;
 import org.polypheny.db.type.PolyType;
 import org.polypheny.db.util.LimitIterator;
-import org.polypheny.db.util.Pair;
 
 
 @Slf4j
@@ -84,35 +80,12 @@ public class StatisticQueryProcessor {
     }
 
 
-    /**
-     * Handles the request for one columns stats
-     *
-     * @param query the select query
-     * @return result of the query
-     */
-    public StatisticQueryColumn selectOneStat( String query ) {
-        StatisticResult res = this.executeSqlSelect( query );
-        if ( res.getColumns() != null && res.getColumns().length == 1 ) {
-            return res.getColumns()[0];
-        }
-        return null;
-    }
-
-
     public StatisticQueryColumn selectOneStatWithRel( RelNode relNode, Transaction transaction, Statement statement ) {
         StatisticResult res = this.executeRel( relNode, transaction, statement );
         if ( res.getColumns() != null && res.getColumns().length == 1 ) {
             return res.getColumns()[0];
         }
         return null;
-    }
-
-
-    /**
-     * Handles the request which retrieves the stats for multiple columns
-     */
-    public StatisticResult selectMultipleStats( String query ) {
-        return this.executeSqlSelect( query );
     }
 
 
@@ -235,26 +208,6 @@ public class StatisticQueryProcessor {
     }
 
 
-    private StatisticResult executeSqlSelect( String query ) {
-        Transaction transaction = getTransaction();
-        Statement statement = transaction.createStatement();
-        StatisticResult result = new StatisticResult();
-
-        try {
-            result = executeSqlSelect( statement, query );
-            transaction.commit();
-        } catch ( QueryExecutionException | TransactionException e ) {
-            log.error( "Caught exception while executing a query from the console", e );
-            try {
-                transaction.rollback();
-            } catch ( TransactionException ex ) {
-                log.error( "Caught exception while rollback", e );
-            }
-        }
-        return result;
-    }
-
-
     private Transaction getTransaction() {
         try {
             return transactionManager.startTransaction( userName, databaseName, false, "Statistics", MultimediaFlavor.FILE );
@@ -340,97 +293,6 @@ public class StatisticQueryProcessor {
     }
 
 
-    private StatisticResult executeSqlSelect( final Statement statement, final String sqlSelect ) throws QueryExecutionException {
-        PolyphenyDbSignature signature;
-        List<List<Object>> rows;
-        Iterator<Object> iterator = null;
-
-        statement.getTransaction().setMonitoringData( new QueryEvent() );
-
-        try {
-            signature = processQuery( statement, sqlSelect );
-            final Enumerable enumerable = signature.enumerable( statement.getDataContext() );
-            //noinspection unchecked
-
-            iterator = enumerable.iterator();
-
-            rows = MetaImpl.collect( signature.cursorFactory, LimitIterator.of( iterator, getPageSize() ), new ArrayList<>() );
-
-        } catch ( Throwable t ) {
-            if ( iterator != null ) {
-                try {
-                    if ( iterator instanceof AutoCloseable ) {
-                        ((AutoCloseable) iterator).close();
-                    }
-                } catch ( Exception e ) {
-                    log.error( "Exception while closing result iterator", e );
-                }
-            }
-            throw new QueryExecutionException( t );
-        }
-
-        try {
-            List<PolyType> types = new ArrayList<>();
-            List<String> names = new ArrayList<>();
-            for ( ColumnMetaData metaData : signature.columns ) {
-
-                types.add( PolyType.get( metaData.type.name ) );
-                names.add( metaData.schemaName + "." + metaData.tableName + "." + metaData.columnName );
-            }
-
-            List<String[]> data = new ArrayList<>();
-            for ( List<Object> row : rows ) {
-                String[] temp = new String[row.size()];
-                int counter = 0;
-                for ( Object o : row ) {
-                    if ( o == null ) {
-                        temp[counter] = null;
-                    } else {
-                        temp[counter] = o.toString();
-                    }
-                    counter++;
-                }
-                data.add( temp );
-            }
-
-            String[][] d = data.toArray( new String[0][] );
-
-            statement.getTransaction().getMonitoringData().setRowCount( data.size() );
-            MonitoringServiceProvider.getInstance().monitorEvent( statement.getTransaction().getMonitoringData() );
-
-            return new StatisticResult( names, types, d );
-        } finally {
-            try {
-                if ( iterator instanceof AutoCloseable ) {
-                    ((AutoCloseable) iterator).close();
-                }
-            } catch ( Exception e ) {
-                log.error( "Exception while closing result iterator2", e );
-            }
-        }
-    }
-
-
-    private PolyphenyDbSignature processQuery( Statement statement, String sql ) {
-        PolyphenyDbSignature signature;
-        SqlProcessor sqlProcessor = statement.getTransaction().getSqlProcessor();
-
-        SqlNode parsed = sqlProcessor.parse( sql );
-
-        if ( parsed.isA( SqlKind.DDL ) ) {
-            // statistics module should not execute any ddls
-            throw new RuntimeException( "No DDL expected here" );
-        } else {
-            Pair<SqlNode, RelDataType> validated = sqlProcessor.validate( statement.getTransaction(), parsed, false );
-            RelRoot logicalRoot = sqlProcessor.translate( statement, validated.left );
-
-            // Prepare
-            signature = statement.getQueryProcessor().prepareQuery( logicalRoot );
-        }
-        return signature;
-    }
-
-
     /**
      * Get the page
      */
@@ -439,11 +301,13 @@ public class StatisticQueryProcessor {
     }
 
 
+    /*
     public boolean hasData( String schema, String table, String column ) {
         String query = "SELECT * FROM " + buildQualifiedName( schema, table ) + " LIMIT 1";
         StatisticResult res = executeSqlSelect( query );
         return res.getColumns() != null && res.getColumns().length > 0;
     }
+     */
 
 
     public static String buildQualifiedName( String... strings ) {

@@ -32,6 +32,7 @@ import lombok.extern.slf4j.Slf4j;
 import lombok.val;
 import org.polypheny.db.config.RuntimeConfig;
 import org.polypheny.db.monitoring.events.MonitoringEvent;
+import org.polypheny.db.monitoring.events.metrics.DmlDataPoint;
 import org.polypheny.db.monitoring.persistence.MonitoringRepository;
 import org.polypheny.db.util.background.BackgroundTask;
 import org.polypheny.db.util.background.BackgroundTask.TaskSchedulingType;
@@ -50,7 +51,8 @@ public class MonitoringQueueImpl implements MonitoringQueue {
 
     private final Set<UUID> queueIds = Sets.newConcurrentHashSet();
     private final Lock processingQueueLock = new ReentrantLock();
-    private final MonitoringRepository repository;
+    private final MonitoringRepository mapRepository;
+    private final MonitoringRepository statisticRepository;
 
     private String backgroundTaskId;
 
@@ -68,8 +70,9 @@ public class MonitoringQueueImpl implements MonitoringQueue {
      *
      * @param startBackGroundTask Indicates whether the background task for consuming the queue will be started.
      */
-    public MonitoringQueueImpl( boolean startBackGroundTask, @NonNull MonitoringRepository repository ) {
-        this.repository = repository;
+    public MonitoringQueueImpl( boolean startBackGroundTask, @NonNull MonitoringRepository mapRepository, @NonNull MonitoringRepository statisticRepository ) {
+        this.mapRepository = mapRepository;
+        this.statisticRepository = statisticRepository;
 
         if ( startBackGroundTask ) {
             this.startBackgroundTask();
@@ -80,8 +83,8 @@ public class MonitoringQueueImpl implements MonitoringQueue {
     /**
      * Ctor will automatically start the background task for consuming the queue.
      */
-    public MonitoringQueueImpl( @NonNull MonitoringRepository repository ) {
-        this( true, repository );
+    public MonitoringQueueImpl( @NonNull MonitoringRepository mapRepository, @NonNull MonitoringRepository statisticRepository ) {
+        this( true, mapRepository, statisticRepository );
     }
 
 
@@ -176,7 +179,14 @@ public class MonitoringQueueImpl implements MonitoringQueue {
 
                 // Sends all extracted metrics to subscribers
                 for ( val dataPoint : dataPoints ) {
-                    this.repository.persistDataPoint( dataPoint );
+                    this.mapRepository.persistDataPoint( dataPoint );
+                    if ( dataPoint instanceof DmlDataPoint ) {
+                        if ( !((DmlDataPoint) dataPoint).getChangedTables().isEmpty() ) {
+                            System.out.println( "Did I understand this correct??????" );
+                            this.statisticRepository.persistDataPoint( dataPoint );
+                        }
+
+                    }
                 }
 
                 countEvents++;

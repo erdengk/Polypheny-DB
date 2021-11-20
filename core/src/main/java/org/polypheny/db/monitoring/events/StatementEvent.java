@@ -17,10 +17,12 @@
 package org.polypheny.db.monitoring.events;
 
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.polypheny.db.jdbc.PolyphenyDbSignature;
 import org.polypheny.db.rel.RelRoot;
 import org.polypheny.db.transaction.Statement;
@@ -31,6 +33,7 @@ import org.polypheny.db.transaction.Statement;
  */
 @Setter
 @Getter
+@Slf4j
 public abstract class StatementEvent extends BaseEvent {
 
     protected String monitoringType;
@@ -46,7 +49,7 @@ public abstract class StatementEvent extends BaseEvent {
     protected boolean isSubQuery;
     protected String durations;
     protected List<Long> accessedPartitions;
-
+    protected List<String> changedTables = new ArrayList<>();
 
     @Override
     public abstract <T extends MonitoringDataPoint> List<Class<T>> getMetrics();
@@ -60,5 +63,20 @@ public abstract class StatementEvent extends BaseEvent {
 
     @Override
     public abstract List<MonitoringDataPoint> analyze();
+
+
+    public void addChangedTables( List<String> qualifiedTableName ) {
+        if ( !this.changedTables.contains( qualifiedTableName ) ) {
+            if ( log.isDebugEnabled() ) {
+                log.debug( "Add changed table: {}", qualifiedTableName );
+            }
+            String name = qualifiedTableName.get( 0 ) + "." + qualifiedTableName.get( 1 );
+            this.changedTables.add( name );
+            System.out.println( "changed Tables, qualifiedTableName: " + name );
+        }
+    }
+
+
+    ;
 
 }

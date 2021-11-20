@@ -235,7 +235,7 @@ public class StatisticsManager<T extends Comparable<T>> {
      *
      * @param qualifiedTable table name
      */
-    private void reevaluateTable( String qualifiedTable ) {
+    public void reevaluateTable( String qualifiedTable ) {
         if ( this.sqlQueryInterface == null ) {
             return;
         }
@@ -286,9 +286,12 @@ public class StatisticsManager<T extends Comparable<T>> {
      * Method to sort a column into the different kinds of column types and hands it to the specific reevaluation
      */
     private StatisticColumn<T> reevaluateColumn( QueryColumn column ) {
+        /*
         if ( !this.sqlQueryInterface.hasData( column.getSchema(), column.getTable(), column.getName() ) ) {
             return null;
         }
+
+         */
         if ( column.getType().getFamily() == PolyTypeFamily.NUMERIC ) {
             return this.reevaluateNumericalColumn( column );
         } else if ( column.getType().getFamily() == PolyTypeFamily.CHARACTER ) {

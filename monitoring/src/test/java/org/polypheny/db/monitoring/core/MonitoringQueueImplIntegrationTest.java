@@ -42,13 +42,14 @@ class MonitoringQueueImplIntegrationTest {
 
         // Initialize mock repository
         TestMapDbRepository repo = new TestMapDbRepository();
+        TestMapDbRepository statisticRepo = new TestMapDbRepository();
         repo.initialize(); // will delete the file
 
         // Mock ui service, not really needed for testing
         MonitoringServiceUi uiService = Mockito.mock( MonitoringServiceUi.class );
 
         // Create monitoring service with dependencies
-        MonitoringQueueImpl queueWriteService = new MonitoringQueueImpl( repo );
+        MonitoringQueueImpl queueWriteService = new MonitoringQueueImpl( repo, statisticRepo );
 
         // Initialize the monitoringService
         val sut = new MonitoringServiceImpl( queueWriteService, repo, uiService );

@@ -201,6 +201,18 @@ public abstract class AbstractQueryProcessor implements QueryProcessor {
             }
         }
 
+        //information for statistics
+        if ( logicalRoot.kind == SqlKind.DELETE ) {
+            statement.getTransaction().getMonitoringData().addChangedTables( logicalRoot.rel.getTable().getQualifiedName() );
+        } else if ( logicalRoot.kind == SqlKind.INSERT ) {
+            statement.getTransaction().getMonitoringData().addChangedTables( logicalRoot.rel.getTable().getQualifiedName() );
+            List<String> test = statement.getTransaction().getMonitoringData().getChangedTables();
+        } else if ( logicalRoot.kind == SqlKind.UPDATE ) {
+            statement.getTransaction().getMonitoringData().addChangedTables( logicalRoot.rel.getTable().getQualifiedName() );
+        } else {
+            System.out.println( "None of the above, SqlKind: " + logicalRoot.kind );
+        }
+
         stopWatch.start();
 
         logicalRoot.rel.accept( new DataModelShuttle() );

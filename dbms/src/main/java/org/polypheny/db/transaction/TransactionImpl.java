@@ -39,7 +39,6 @@ import org.polypheny.db.config.RuntimeConfig;
 import org.polypheny.db.information.InformationManager;
 import org.polypheny.db.jdbc.JavaTypeFactoryImpl;
 import org.polypheny.db.monitoring.events.StatementEvent;
-import org.polypheny.db.monitoring.statistic.StatisticsManager;
 import org.polypheny.db.prepare.PolyphenyDbCatalogReader;
 import org.polypheny.db.processing.DataMigrator;
 import org.polypheny.db.processing.DataMigratorImpl;
@@ -164,7 +163,7 @@ public class TransactionImpl implements Transaction, Comparable {
             }
 
             if ( changedTables.size() > 0 ) {
-                StatisticsManager.getInstance().apply( changedTables );
+           //     StatisticsManager.getInstance().apply( changedTables );
             }
 
             IndexManager.getInstance().commit( this.xid );
@@ -265,6 +264,7 @@ public class TransactionImpl implements Transaction, Comparable {
             if ( log.isDebugEnabled() ) {
                 log.debug( "Add changed table: {}", qualifiedTableName );
             }
+            System.out.println( "TransactionImpl changedTables: " + qualifiedTableName );
             this.changedTables.add( qualifiedTableName );
         }
     }
