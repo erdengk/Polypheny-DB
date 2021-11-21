@@ -475,13 +475,7 @@ public class StatisticsManager<T extends Comparable<T>> {
 
             }
         }
-
         return null;
-        /*
-        String query = "SELECT " + aggregate + " (" + StatisticQueryProcessor.buildQualifiedName( schema, table, column ) + ") FROM " + StatisticQueryProcessor.buildQualifiedName( schema, table );
-        return this.sqlQueryInterface.selectOneStat( query );
-
-         */
     }
 
 
@@ -523,13 +517,6 @@ public class StatisticsManager<T extends Comparable<T>> {
             }
         }
         return null;
-
- /*
-
-        String query = "SELECT " + qualifiedColumnName + " FROM " + qualifiedTableName + " GROUP BY " + qualifiedColumnName + getStatQueryLimit( 1 );
-        return this.sqlQueryInterface.selectOneStat( query );
-
-  */
     }
 
 
@@ -601,23 +588,6 @@ public class StatisticsManager<T extends Comparable<T>> {
 
             }
         }
-
-
- /*
-        String query = "SELECT COUNT(" + columnName + ") FROM " + tableName;
-        StatisticQueryColumn res = this.sqlQueryInterface.selectOneStat( query );
-
-
-        if ( res != null && res.getData() != null && res.getData().length != 0 ) {
-            try {
-                return Integer.parseInt( res.getData()[0] );
-            } catch ( NumberFormatException e ) {
-                log.error( "Count could not be parsed for column {}.", column.getQualifiedColumnName(), e );
-            }
-        }
-
-
-  */
         return 0;
     }
 

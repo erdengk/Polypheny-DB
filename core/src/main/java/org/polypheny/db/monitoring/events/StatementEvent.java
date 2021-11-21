@@ -23,6 +23,8 @@ import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.polypheny.db.catalog.Catalog;
+import org.polypheny.db.catalog.exceptions.UnknownDatabaseException;
 import org.polypheny.db.jdbc.PolyphenyDbSignature;
 import org.polypheny.db.rel.RelRoot;
 import org.polypheny.db.transaction.Statement;
@@ -70,9 +72,25 @@ public abstract class StatementEvent extends BaseEvent {
             if ( log.isDebugEnabled() ) {
                 log.debug( "Add changed table: {}", qualifiedTableName );
             }
-            String name = qualifiedTableName.get( 0 ) + "." + qualifiedTableName.get( 1 );
-            this.changedTables.add( name );
-            System.out.println( "changed Tables, qualifiedTableName: " + name );
+            String defaultSchemaName = "public.";
+            try {
+                defaultSchemaName = Catalog.getInstance().getDatabase( "APP" ).defaultSchemaName;
+            } catch ( UnknownDatabaseException e ) {
+                e.printStackTrace();
+            }
+
+            if ( !qualifiedTableName.isEmpty() ) {
+                String name = null;
+                if ( qualifiedTableName.size() == 2 ) {
+                    name = qualifiedTableName.get( 0 ) + "." + qualifiedTableName.get( 1 );
+                } else if ( qualifiedTableName.size() == 1 ) {
+                    name = defaultSchemaName + qualifiedTableName.get( 0 );
+                }
+
+                this.changedTables.add( name );
+                System.out.println( "changed Tables, qualifiedTableName: " + name );
+            }
+
         }
     }
 

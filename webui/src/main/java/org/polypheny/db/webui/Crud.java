@@ -174,13 +174,8 @@ import org.polypheny.db.rel.RelNode;
 import org.polypheny.db.rel.RelRoot;
 import org.polypheny.db.rel.core.Sort;
 import org.polypheny.db.rel.type.RelDataType;
-import org.polypheny.db.sql.SqlDelete;
-import org.polypheny.db.sql.SqlInsert;
 import org.polypheny.db.sql.SqlKind;
 import org.polypheny.db.sql.SqlNode;
-import org.polypheny.db.sql.SqlUpdate;
-import org.polypheny.db.sql.ddl.SqlDropSchema;
-import org.polypheny.db.sql.ddl.SqlDropTable;
 import org.polypheny.db.transaction.Statement;
 import org.polypheny.db.transaction.Transaction;
 import org.polypheny.db.transaction.Transaction.MultimediaFlavor;
@@ -3964,6 +3959,7 @@ public class Crud implements InformationObserver {
         SqlNode parsed = sqlProcessor.parse( sql );
         RelRoot logicalRoot = null;
         if ( parsed.isA( SqlKind.DDL ) ) {
+            /*
             if ( isActiveTracking ) {
                 if ( parsed instanceof SqlDropTable ) {
                     statement.getTransaction().addChangedTable( ((SqlDropTable) parsed).getName().getSimple() );
@@ -3971,8 +3967,11 @@ public class Crud implements InformationObserver {
                     Catalog.getInstance().getTables( new Catalog.Pattern( databaseName ), new Catalog.Pattern( ((SqlDropSchema) parsed).getName().getSimple() ), null ).forEach( t -> statement.getTransaction().addChangedTable( t.getSchemaName() + "." + t.name ) );
                 }
             }
+            
+             */
             signature = sqlProcessor.prepareDdl( statement, parsed );
         } else {
+            /*
             if ( isActiveTracking ) {
                 if ( parsed instanceof SqlInsert ) {
                     statement.getTransaction().addChangedTable( ((SqlInsert) parsed).getTargetTable().toString() );
@@ -3982,6 +3981,8 @@ public class Crud implements InformationObserver {
                     statement.getTransaction().addChangedTable( ((SqlUpdate) parsed).getTargetTable().toString() );
                 }
             }
+
+             */
             Pair<SqlNode, RelDataType> validated = sqlProcessor.validate( statement.getTransaction(), parsed, RuntimeConfig.ADD_DEFAULT_VALUES_IN_INSERTS.getBoolean() );
             logicalRoot = sqlProcessor.translate( statement, validated.left );
             signature = statement.getQueryProcessor().prepareQuery( logicalRoot );
