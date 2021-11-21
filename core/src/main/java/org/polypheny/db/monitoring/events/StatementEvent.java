@@ -84,7 +84,7 @@ public abstract class StatementEvent extends BaseEvent {
                 if ( qualifiedTableName.size() == 2 ) {
                     name = qualifiedTableName.get( 0 ) + "." + qualifiedTableName.get( 1 );
                 } else if ( qualifiedTableName.size() == 1 ) {
-                    name = defaultSchemaName + qualifiedTableName.get( 0 );
+                    name = defaultSchemaName + "." + qualifiedTableName.get( 0 );
                 }
 
                 this.changedTables.add( name );

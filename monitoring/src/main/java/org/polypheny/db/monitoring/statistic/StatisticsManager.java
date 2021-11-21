@@ -18,13 +18,18 @@ package org.polypheny.db.monitoring.statistic;
 
 
 import com.google.common.collect.ImmutableList;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import java.beans.PropertyChangeSupport;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import lombok.Getter;
@@ -84,7 +89,7 @@ import org.polypheny.db.util.background.BackgroundTaskManager;
  * DELETEs and UPDATEs should wait to be reprocessed
  */
 @Slf4j
-public class StatisticsManager<T extends Comparable<T>> {
+public class StatisticsManager<T extends Comparable<T>> implements PropertyChangeListener {
 
     private static volatile StatisticsManager<?> instance = null;
 
@@ -96,6 +101,10 @@ public class StatisticsManager<T extends Comparable<T>> {
     private final ExecutorService threadPool = Executors.newSingleThreadExecutor();
 
     private int buffer = RuntimeConfig.STATISTIC_BUFFER.getInteger();
+
+    Queue<String> tablesToUpdate = new ConcurrentLinkedQueue<>();
+    protected final PropertyChangeSupport listeners = new PropertyChangeSupport( this );
+
 
     @Setter
     @Getter
@@ -119,6 +128,13 @@ public class StatisticsManager<T extends Comparable<T>> {
         this.insertedData = new HashMap<>();
         this.deletedData = new HashMap<>();
         this.updatedData = new HashMap<>();
+        this.listeners.addPropertyChangeListener( this );
+    }
+
+
+    public void addTablesToUpdate( String table ) {
+        tablesToUpdate.add( table );
+        listeners.firePropertyChange( "testTableUpdate", null, table );
     }
 
 
@@ -773,6 +789,20 @@ public class StatisticsManager<T extends Comparable<T>> {
             System.out.println( "How often AM I here: " + count++ );
         } else {
             relNode.getInputs().forEach( this::getDataTuples );
+        }
+    }
+
+
+    @Override
+    public void propertyChange( PropertyChangeEvent evt ) {
+        System.out.println( this.tablesToUpdate );
+        threadPool.execute( this::workQueue );
+    }
+
+
+    private void workQueue() {
+        while ( !this.tablesToUpdate.isEmpty() ) {
+            reevaluateTable( this.tablesToUpdate.poll() );
         }
     }
 

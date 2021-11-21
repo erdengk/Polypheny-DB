@@ -65,4 +65,10 @@ public class DmlDataPoint implements MonitoringDataPoint, Serializable {
         return this.recordedTimestamp;
     }
 
+
+    @Override
+    public DataPointType getPointType() {
+        return DataPointType.DML;
+    }
+
 }

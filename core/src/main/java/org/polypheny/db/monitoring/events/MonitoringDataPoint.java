@@ -31,4 +31,12 @@ public interface MonitoringDataPoint extends Serializable {
 
     Timestamp timestamp();
 
+    DataPointType getPointType();
+
+
+    enum DataPointType {
+        DML,
+        QUERY;
+    }
+
 }

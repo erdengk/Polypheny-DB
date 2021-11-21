@@ -25,6 +25,7 @@ import org.polypheny.db.monitoring.statistic.StatisticsManager;
 
 public class StatisticRepository implements MonitoringRepository {
 
+
     @Override
     public void initialize() {
 
@@ -34,7 +35,7 @@ public class StatisticRepository implements MonitoringRepository {
     @Override
     public void persistDataPoint( @NonNull MonitoringDataPoint dataPoint ) {
         StatisticsManager<?> statisticsManager = StatisticsManager.getInstance();
-        ((DmlDataPoint) dataPoint).getChangedTables().forEach( statisticsManager::reevaluateTable );
+        ((DmlDataPoint) dataPoint).getChangedTables().forEach( statisticsManager::addTablesToUpdate );
     }
 
 

@@ -31,6 +31,7 @@ import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
 import org.polypheny.db.config.RuntimeConfig;
+import org.polypheny.db.monitoring.events.MonitoringDataPoint.DataPointType;
 import org.polypheny.db.monitoring.events.MonitoringEvent;
 import org.polypheny.db.monitoring.events.metrics.DmlDataPoint;
 import org.polypheny.db.monitoring.persistence.MonitoringRepository;
@@ -180,9 +181,8 @@ public class MonitoringQueueImpl implements MonitoringQueue {
                 // Sends all extracted metrics to subscribers
                 for ( val dataPoint : dataPoints ) {
                     this.mapRepository.persistDataPoint( dataPoint );
-                    if ( dataPoint instanceof DmlDataPoint ) {
+                    if ( dataPoint.getPointType() == DataPointType.DML ) {
                         if ( !((DmlDataPoint) dataPoint).getChangedTables().isEmpty() ) {
-                            System.out.println( "Did I understand this correct??????" );
                             this.statisticRepository.persistDataPoint( dataPoint );
                         }
 

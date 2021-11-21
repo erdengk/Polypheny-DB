@@ -64,4 +64,10 @@ public class QueryDataPoint implements MonitoringDataPoint, Serializable {
         return this.recordedTimestamp;
     }
 
+
+    @Override
+    public DataPointType getPointType() {
+        return DataPointType.QUERY;
+    }
+
 }
