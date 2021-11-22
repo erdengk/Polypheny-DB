@@ -181,6 +181,9 @@ public class MonitoringQueueImpl implements MonitoringQueue {
                 // Sends all extracted metrics to subscribers
                 for ( val dataPoint : dataPoints ) {
                     this.mapRepository.persistDataPoint( dataPoint );
+                    if ( dataPoint.getPointType() == DataPointType.QUERY ) {
+                        this.statisticRepository.persistDataPoint( dataPoint );
+                    }
                     if ( dataPoint.getPointType() == DataPointType.DML ) {
                         if ( !((DmlDataPoint) dataPoint).getChangedTables().isEmpty() ) {
                             this.statisticRepository.persistDataPoint( dataPoint );

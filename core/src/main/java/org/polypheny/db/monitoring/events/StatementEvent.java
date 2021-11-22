@@ -19,6 +19,7 @@ package org.polypheny.db.monitoring.events;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
@@ -52,6 +53,7 @@ public abstract class StatementEvent extends BaseEvent {
     protected String durations;
     protected List<Long> accessedPartitions;
     protected List<String> changedTables = new ArrayList<>();
+    protected HashMap<String, Integer> rowCountPerTable = new HashMap<>();
 
     @Override
     public abstract <T extends MonitoringDataPoint> List<Class<T>> getMetrics();
@@ -91,6 +93,13 @@ public abstract class StatementEvent extends BaseEvent {
                 System.out.println( "changed Tables, qualifiedTableName: " + name );
             }
 
+        }
+    }
+
+
+    public void addRowCountPerTable( String tableId, int tableSize ) {
+        if ( !rowCountPerTable.containsKey( tableId ) ) {
+            rowCountPerTable.put( tableId, tableSize );
         }
     }
 

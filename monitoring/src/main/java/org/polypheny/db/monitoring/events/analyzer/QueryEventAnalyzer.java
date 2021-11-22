@@ -40,6 +40,7 @@ public class QueryEventAnalyzer {
                 .isSubQuery( queryEvent.isSubQuery() )
                 .recordedTimestamp( queryEvent.getRecordedTimestamp() )
                 .accessedPartitions( queryEvent.getAccessedPartitions() )
+                .rowCountPerTable( queryEvent.getRowCountPerTable() )
                 .build();
 
         RelRoot relRoot = queryEvent.getRouted();

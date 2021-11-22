@@ -64,6 +64,7 @@ import org.polypheny.db.rel.logical.LogicalProject;
 import org.polypheny.db.rel.logical.LogicalSort;
 import org.polypheny.db.rel.logical.LogicalTableScan;
 import org.polypheny.db.rel.logical.LogicalValues;
+import org.polypheny.db.rel.type.RelDataType;
 import org.polypheny.db.rel.type.RelDataTypeField;
 import org.polypheny.db.rex.RexBuilder;
 import org.polypheny.db.rex.RexLiteral;
@@ -106,6 +107,9 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
     protected final PropertyChangeSupport listeners = new PropertyChangeSupport( this );
 
 
+    protected HashMap<String, Integer> rowCountPerTable = new HashMap<>();
+
+
     @Setter
     @Getter
     private String revalId = null;
@@ -133,8 +137,10 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
 
 
     public void addTablesToUpdate( String table ) {
-        tablesToUpdate.add( table );
-        listeners.firePropertyChange( "testTableUpdate", null, table );
+        if ( !tablesToUpdate.contains( table ) ) {
+            tablesToUpdate.add( table );
+            listeners.firePropertyChange( "testTableUpdate", null, table );
+        }
     }
 
 
@@ -255,14 +261,22 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
         if ( this.sqlQueryInterface == null ) {
             return;
         }
+        long schemaId = 0;
 
         String[] splits = qualifiedTable.replace( "\"", "" ).split( "\\." );
         if ( splits.length == 1 ) {
             // default schema here
             try {
                 splits = new String[]{ Catalog.getInstance().getDatabase( "APP" ).defaultSchemaName, splits[0] };
+                schemaId = Catalog.getInstance().getDatabase( "APP" ).id;
             } catch ( UnknownDatabaseException e ) {
                 throw new RuntimeException( e );
+            }
+        } else if ( splits.length == 2 ) {
+            try {
+                schemaId = Catalog.getInstance().getSchema( 1, splits[0] ).id;
+            } catch ( UnknownSchemaException e ) {
+                e.printStackTrace();
             }
         }
 
@@ -270,14 +284,19 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
             return;
         }
         deleteTable( splits[0], splits[1] );
-        List<QueryColumn> res = this.sqlQueryInterface.getAllColumns( splits[0], splits[1] );
 
-        for ( QueryColumn column : res ) {
-            StatisticColumn<T> col = reevaluateColumn( column );
-            if ( col != null ) {
-                put( column.getSchema(), column.getTable(), column.getName(), col );
+        if ( Catalog.getInstance().checkIfExistsTable( schemaId, splits[1] ) ) {
+            List<QueryColumn> res = this.sqlQueryInterface.getAllColumns( splits[0], splits[1] );
+
+            for ( QueryColumn column : res ) {
+                StatisticColumn<T> col = reevaluateColumn( column );
+                if ( col != null ) {
+                    put( column.getSchema(), column.getTable(), column.getName(), col );
+                }
+
             }
-
+        } else {
+            return;
         }
 
     }
@@ -483,9 +502,34 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
                     throw new RuntimeException( "Unknown aggregate is used in Statistic Manager." );
                 }
 
-                AggregateCall aggregateCall = AggregateCall.create( operator, false, false, Collections.singletonList( 0 ), -1, RelCollations.EMPTY, cluster.getTypeFactory().createTypeWithNullability( cluster.getTypeFactory().createPolyType( logicalProject.getRowType().getFieldList().get( 0 ).getType().getPolyType() ), true ), "min-max" );
+                RelDataType relDataType = logicalProject.getRowType().getFieldList().get( 0 ).getType();
+                RelDataType dataType;
+                if ( relDataType.getPolyType() == PolyType.DECIMAL ) {
+                    dataType = cluster.getTypeFactory().createTypeWithNullability(
+                            cluster.getTypeFactory().createPolyType(
+                                    relDataType.getPolyType(), relDataType.getPrecision(), relDataType.getScale() ),
+                            true );
+                } else {
+                    dataType = cluster.getTypeFactory().createTypeWithNullability(
+                            cluster.getTypeFactory().createPolyType(
+                                    relDataType.getPolyType() ), true );
+                }
 
-                RelNode relNode = LogicalAggregate.create( logicalProject, ImmutableBitSet.of(), Collections.singletonList( ImmutableBitSet.of() ), Collections.singletonList( aggregateCall ) );
+                AggregateCall aggregateCall = AggregateCall.create(
+                        operator,
+                        false,
+                        false,
+                        Collections.singletonList( 0 ),
+                        -1,
+                        RelCollations.EMPTY,
+                        dataType,
+                        "min-max" );
+
+                RelNode relNode = LogicalAggregate.create(
+                        logicalProject,
+                        ImmutableBitSet.of(),
+                        Collections.singletonList( ImmutableBitSet.of() ),
+                        Collections.singletonList( aggregateCall ) );
 
                 return this.sqlQueryInterface.selectOneStatWithRel( relNode, transaction, statement );
 
@@ -672,6 +716,12 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
         im.registerInformation( numericalInformation );
         im.registerInformation( alphabeticalInformation );
 
+        InformationGroup tableGroup = new InformationGroup( page, "Table Statistic" );
+        im.addGroup( tableGroup );
+
+        InformationTable tableInformation = new InformationTable( tableGroup, Arrays.asList( "Table Name", "Row Count" ) );
+        im.registerInformation( tableInformation );
+
         InformationGroup actionGroup = new InformationGroup( page, "Action" );
         im.addGroup( actionGroup );
         Action reevaluateAction = parameters -> {
@@ -686,6 +736,7 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
             numericalInformation.reset();
             alphabeticalInformation.reset();
             temporalInformation.reset();
+            tableInformation.reset();
             statisticSchemaMap.values().forEach( schema -> schema.values().forEach( table -> table.forEach( ( k, v ) -> {
                 if ( v instanceof NumericalStatisticColumn ) {
 
@@ -713,6 +764,8 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
                 }
 
             } ) ) );
+            rowCountPerTable.forEach( tableInformation::addRow );
+
         } );
 
     }
@@ -802,8 +855,21 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
 
     private void workQueue() {
         while ( !this.tablesToUpdate.isEmpty() ) {
-            reevaluateTable( this.tablesToUpdate.poll() );
+            String table = this.tablesToUpdate.poll();
+
+            reevaluateTable( table );
+            rowCountPerTable.remove( table );
         }
+    }
+
+
+    public void rowCounts( HashMap<String, Integer> rowCountTable ) {
+
+        rowCountTable.forEach( ( k, v ) -> {
+            if ( !rowCountPerTable.containsKey( k ) ) {
+                rowCountPerTable.put( k.replaceAll( "\"", "" ), v );
+            }
+        } );
     }
 
 

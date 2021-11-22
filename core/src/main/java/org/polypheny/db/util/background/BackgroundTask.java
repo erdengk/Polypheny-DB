@@ -24,6 +24,7 @@ public interface BackgroundTask {
         EVERY_FIFTEEN_MINUTES( 900000, TaskDelayType.DELAYED ),
         EVERY_THIRTY_MINUTES( 1800000, TaskDelayType.DELAYED ),
 
+        EVERY_TEN_MILLISECOND_FIXED( 10, TaskDelayType.FIXED ),
         EVERY_SECOND_FIXED( 1000, TaskDelayType.FIXED ),
         EVERY_FIVE_SECONDS_FIXED( 5000, TaskDelayType.FIXED ),
         EVERY_TEN_SECONDS_FIXED( 10000, TaskDelayType.FIXED ),

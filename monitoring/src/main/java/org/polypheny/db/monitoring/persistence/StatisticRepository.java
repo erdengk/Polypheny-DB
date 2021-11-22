@@ -20,7 +20,9 @@ import java.sql.Timestamp;
 import java.util.List;
 import lombok.NonNull;
 import org.polypheny.db.monitoring.events.MonitoringDataPoint;
+import org.polypheny.db.monitoring.events.MonitoringDataPoint.DataPointType;
 import org.polypheny.db.monitoring.events.metrics.DmlDataPoint;
+import org.polypheny.db.monitoring.events.metrics.QueryDataPoint;
 import org.polypheny.db.monitoring.statistic.StatisticsManager;
 
 public class StatisticRepository implements MonitoringRepository {
@@ -35,7 +37,13 @@ public class StatisticRepository implements MonitoringRepository {
     @Override
     public void persistDataPoint( @NonNull MonitoringDataPoint dataPoint ) {
         StatisticsManager<?> statisticsManager = StatisticsManager.getInstance();
-        ((DmlDataPoint) dataPoint).getChangedTables().forEach( statisticsManager::addTablesToUpdate );
+        if ( dataPoint.getPointType() == DataPointType.DML ) {
+            ((DmlDataPoint) dataPoint).getChangedTables().forEach( statisticsManager::addTablesToUpdate );
+        } else if ( dataPoint.getPointType() == DataPointType.QUERY ) {
+            statisticsManager.rowCounts( ((QueryDataPoint) dataPoint).getRowCountPerTable() );
+        }
+
+
     }
 
 

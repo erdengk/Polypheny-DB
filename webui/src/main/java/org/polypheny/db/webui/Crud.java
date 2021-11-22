@@ -4069,6 +4069,11 @@ public class Crud implements InformationObserver {
      * Get the Number of rows in a table
      */
     private int getTableSize( Transaction transaction, final UIRequest request ) throws QueryExecutionException {
+
+        if ( transaction.getMonitoringData() == null ) {
+            transaction.setMonitoringData( new QueryEvent() );
+        }
+
         String[] t = request.tableId.split( "\\." );
         String tableId = String.format( "\"%s\".\"%s\"", t[0], t[1] );
         String query = "SELECT count(*) FROM " + tableId;
@@ -4080,7 +4085,10 @@ public class Crud implements InformationObserver {
         if ( result.getData().length == 0 ) {
             return 0;
         } else {
-            return Integer.parseInt( result.getData()[0][0] );
+            int tableSize = Integer.parseInt( result.getData()[0][0] );
+
+            transaction.getMonitoringData().addRowCountPerTable( tableId, tableSize );
+            return tableSize;
         }
     }
 
