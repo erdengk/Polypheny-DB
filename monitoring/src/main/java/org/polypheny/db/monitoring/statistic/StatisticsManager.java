@@ -22,6 +22,7 @@ import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -120,6 +121,7 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
     Map<Long, List<RelNode>> updatedData;
     ImmutableList<ImmutableList<RexLiteral>> columnInformation;
     List<RelDataTypeField> fieldlist;
+    private List<String> deletedTable = new ArrayList<>();
 
 
     private StatisticsManager() {
@@ -853,12 +855,21 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
     }
 
 
+    public void deleteTableToUpdate( String name ) {
+        deletedTable.add( name );
+        System.out.println( "to delete: " + name );
+        this.tablesToUpdate.remove( name );
+        System.out.println( "after deletion: " + tablesToUpdate.toString() );
+    }
+
+
     private void workQueue() {
         while ( !this.tablesToUpdate.isEmpty() ) {
             String table = this.tablesToUpdate.poll();
-
-            reevaluateTable( table );
-            rowCountPerTable.remove( table );
+            if ( !deletedTable.contains( table ) ) {
+                reevaluateTable( table );
+                rowCountPerTable.remove( table );
+            }
         }
     }
 

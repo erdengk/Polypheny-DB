@@ -26,7 +26,8 @@ import java.util.List;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.calcite.avatica.AvaticaSeverity;
-import org.apache.calcite.avatica.Meta;
+import org.apache.calcite.avatica.Meta.CursorFactory;
+import org.apache.calcite.avatica.Meta.StatementType;
 import org.apache.calcite.avatica.remote.AvaticaRuntimeException;
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.commons.lang3.time.StopWatch;
@@ -45,6 +46,7 @@ import org.polypheny.db.information.InformationManager;
 import org.polypheny.db.information.InformationPage;
 import org.polypheny.db.information.InformationQueryPlan;
 import org.polypheny.db.jdbc.PolyphenyDbSignature;
+import org.polypheny.db.monitoring.statistic.StatisticsManager;
 import org.polypheny.db.plan.RelOptCluster;
 import org.polypheny.db.plan.RelOptTable.ViewExpander;
 import org.polypheny.db.plan.RelOptUtil;
@@ -67,6 +69,9 @@ import org.polypheny.db.sql.SqlLiteral;
 import org.polypheny.db.sql.SqlNode;
 import org.polypheny.db.sql.SqlNodeList;
 import org.polypheny.db.sql.SqlUtil;
+import org.polypheny.db.sql.ddl.SqlDropMaterializedView;
+import org.polypheny.db.sql.ddl.SqlDropTable;
+import org.polypheny.db.sql.ddl.SqlDropView;
 import org.polypheny.db.sql.dialect.PolyphenyDbSqlDialect;
 import org.polypheny.db.sql.fun.SqlStdOperatorTable;
 import org.polypheny.db.sql.parser.SqlParseException;
@@ -241,6 +246,27 @@ public class SqlProcessorImpl implements SqlProcessor, ViewExpander {
 
     @Override
     public PolyphenyDbSignature<?> prepareDdl( Statement statement, SqlNode parsed ) {
+        System.out.println( "show what kind: " + parsed.getKind() );
+        if ( parsed instanceof SqlDropTable ) {
+            if ( ((SqlDropTable) parsed).getName().names.size() == 2 ) {
+                StatisticsManager.getInstance().deleteTableToUpdate( ((SqlDropTable) parsed).getName().names.get( 0 ) + "." + ((SqlDropTable) parsed).getName().names.get( 1 ) );
+            } else if ( ((SqlDropTable) parsed).getName().names.size() == 1 ) {
+                StatisticsManager.getInstance().deleteTableToUpdate( "public." + ((SqlDropTable) parsed).getName().getSimple() );
+            }
+        } else if ( parsed instanceof SqlDropView ) {
+            if ( ((SqlDropView) parsed).getName().names.size() == 2 ) {
+                StatisticsManager.getInstance().deleteTableToUpdate( ((SqlDropView) parsed).getName().names.get( 0 ) + "." + ((SqlDropView) parsed).getName().names.get( 1 ) );
+            } else if ( ((SqlDropView) parsed).getName().names.size() == 1 ) {
+                StatisticsManager.getInstance().deleteTableToUpdate( "public." + ((SqlDropView) parsed).getName().getSimple() );
+            }
+        } else if ( parsed instanceof SqlDropMaterializedView ) {
+            if ( ((SqlDropMaterializedView) parsed).getName().names.size() == 2 ) {
+                StatisticsManager.getInstance().deleteTableToUpdate( ((SqlDropMaterializedView) parsed).getName().names.get( 0 ) + "." + ((SqlDropMaterializedView) parsed).getName().names.get( 1 ) );
+            } else if ( ((SqlDropMaterializedView) parsed).getName().names.size() == 1 ) {
+                StatisticsManager.getInstance().deleteTableToUpdate( "public." + ((SqlDropMaterializedView) parsed).getName().getSimple() );
+            }
+        }
+
         if ( parsed instanceof SqlExecutableStatement ) {
             try {
                 // Acquire global schema lock
@@ -255,12 +281,12 @@ public class SqlProcessorImpl implements SqlProcessor, ViewExpander {
                         ImmutableMap.of(),
                         null,
                         ImmutableList.of(),
-                        Meta.CursorFactory.OBJECT,
+                        CursorFactory.OBJECT,
                         statement.getTransaction().getSchema(),
                         ImmutableList.of(),
                         -1,
                         null,
-                        Meta.StatementType.OTHER_DDL,
+                        StatementType.OTHER_DDL,
                         new ExecutionTimeMonitor() );
             } catch ( DeadlockException e ) {
                 throw new RuntimeException( "Exception while acquiring global schema lock", e );
