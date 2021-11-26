@@ -246,26 +246,7 @@ public class SqlProcessorImpl implements SqlProcessor, ViewExpander {
 
     @Override
     public PolyphenyDbSignature<?> prepareDdl( Statement statement, SqlNode parsed ) {
-        System.out.println( "show what kind: " + parsed.getKind() );
-        if ( parsed instanceof SqlDropTable ) {
-            if ( ((SqlDropTable) parsed).getName().names.size() == 2 ) {
-                StatisticsManager.getInstance().deleteTableToUpdate( ((SqlDropTable) parsed).getName().names.get( 0 ) + "." + ((SqlDropTable) parsed).getName().names.get( 1 ) );
-            } else if ( ((SqlDropTable) parsed).getName().names.size() == 1 ) {
-                StatisticsManager.getInstance().deleteTableToUpdate( "public." + ((SqlDropTable) parsed).getName().getSimple() );
-            }
-        } else if ( parsed instanceof SqlDropView ) {
-            if ( ((SqlDropView) parsed).getName().names.size() == 2 ) {
-                StatisticsManager.getInstance().deleteTableToUpdate( ((SqlDropView) parsed).getName().names.get( 0 ) + "." + ((SqlDropView) parsed).getName().names.get( 1 ) );
-            } else if ( ((SqlDropView) parsed).getName().names.size() == 1 ) {
-                StatisticsManager.getInstance().deleteTableToUpdate( "public." + ((SqlDropView) parsed).getName().getSimple() );
-            }
-        } else if ( parsed instanceof SqlDropMaterializedView ) {
-            if ( ((SqlDropMaterializedView) parsed).getName().names.size() == 2 ) {
-                StatisticsManager.getInstance().deleteTableToUpdate( ((SqlDropMaterializedView) parsed).getName().names.get( 0 ) + "." + ((SqlDropMaterializedView) parsed).getName().names.get( 1 ) );
-            } else if ( ((SqlDropMaterializedView) parsed).getName().names.size() == 1 ) {
-                StatisticsManager.getInstance().deleteTableToUpdate( "public." + ((SqlDropMaterializedView) parsed).getName().getSimple() );
-            }
-        }
+        extractStatistics( parsed );
 
         if ( parsed instanceof SqlExecutableStatement ) {
             try {
@@ -298,6 +279,29 @@ public class SqlProcessorImpl implements SqlProcessor, ViewExpander {
             }
         } else {
             throw new RuntimeException( "All DDL queries should be of a type that inherits SqlExecutableStatement. But this one is of type " + parsed.getClass() );
+        }
+    }
+
+
+    private void extractStatistics( SqlNode parsed ) {
+        if ( parsed instanceof SqlDropTable ) {
+            if ( ((SqlDropTable) parsed).getName().names.size() == 2 ) {
+                StatisticsManager.getInstance().deleteTableToUpdate( ((SqlDropTable) parsed).getName().names.get( 0 ) + "." + ((SqlDropTable) parsed).getName().names.get( 1 ) );
+            } else if ( ((SqlDropTable) parsed).getName().names.size() == 1 ) {
+                StatisticsManager.getInstance().deleteTableToUpdate( "public." + ((SqlDropTable) parsed).getName().getSimple() );
+            }
+        } else if ( parsed instanceof SqlDropView ) {
+            if ( ((SqlDropView) parsed).getName().names.size() == 2 ) {
+                StatisticsManager.getInstance().deleteTableToUpdate( ((SqlDropView) parsed).getName().names.get( 0 ) + "." + ((SqlDropView) parsed).getName().names.get( 1 ) );
+            } else if ( ((SqlDropView) parsed).getName().names.size() == 1 ) {
+                StatisticsManager.getInstance().deleteTableToUpdate( "public." + ((SqlDropView) parsed).getName().getSimple() );
+            }
+        } else if ( parsed instanceof SqlDropMaterializedView ) {
+            if ( ((SqlDropMaterializedView) parsed).getName().names.size() == 2 ) {
+                StatisticsManager.getInstance().deleteTableToUpdate( ((SqlDropMaterializedView) parsed).getName().names.get( 0 ) + "." + ((SqlDropMaterializedView) parsed).getName().names.get( 1 ) );
+            } else if ( ((SqlDropMaterializedView) parsed).getName().names.size() == 1 ) {
+                StatisticsManager.getInstance().deleteTableToUpdate( "public." + ((SqlDropMaterializedView) parsed).getName().getSimple() );
+            }
         }
     }
 

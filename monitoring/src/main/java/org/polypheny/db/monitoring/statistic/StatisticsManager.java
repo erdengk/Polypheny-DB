@@ -850,16 +850,14 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
 
     @Override
     public void propertyChange( PropertyChangeEvent evt ) {
-        System.out.println( this.tablesToUpdate );
         threadPool.execute( this::workQueue );
     }
 
 
     public void deleteTableToUpdate( String name ) {
         deletedTable.add( name );
-        System.out.println( "to delete: " + name );
         this.tablesToUpdate.remove( name );
-        System.out.println( "after deletion: " + tablesToUpdate.toString() );
+        rowCountPerTable.remove( name );
     }
 
 
@@ -868,8 +866,8 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
             String table = this.tablesToUpdate.poll();
             if ( !deletedTable.contains( table ) ) {
                 reevaluateTable( table );
-                rowCountPerTable.remove( table );
             }
+            rowCountPerTable.remove( table );
         }
     }
 

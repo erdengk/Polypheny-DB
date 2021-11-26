@@ -41,6 +41,7 @@ public class DmlEventAnalyzer {
                 .recordedTimestamp( dmlEvent.getRecordedTimestamp() )
                 .accessedPartitions( dmlEvent.getAccessedPartitions() )
                 .changedTables( dmlEvent.getChangedTables() )
+                .sqlKind( dmlEvent.getSqlKind() )
                 .build();
 
         RelRoot relRoot = dmlEvent.getRouted();

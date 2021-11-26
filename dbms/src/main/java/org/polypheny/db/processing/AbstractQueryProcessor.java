@@ -196,6 +196,7 @@ public abstract class AbstractQueryProcessor implements QueryProcessor {
         if ( statement.getTransaction().getMonitoringData() == null ) {
             if ( logicalRoot.kind.belongsTo( SqlKind.DML ) ) {
                 statement.getTransaction().setMonitoringData( new DmlEvent() );
+
             } else if ( logicalRoot.kind.belongsTo( SqlKind.QUERY ) ) {
                 statement.getTransaction().setMonitoringData( new QueryEvent() );
             }
@@ -205,9 +206,10 @@ public abstract class AbstractQueryProcessor implements QueryProcessor {
         if ( logicalRoot.kind == SqlKind.DELETE ) {
             statement.getTransaction().getMonitoringData().addChangedTables( logicalRoot.rel.getTable().getQualifiedName() );
         } else if ( logicalRoot.kind == SqlKind.INSERT ) {
+            statement.getTransaction().getMonitoringData().setSqlKind( logicalRoot.kind );
             statement.getTransaction().getMonitoringData().addChangedTables( logicalRoot.rel.getTable().getQualifiedName() );
-            List<String> test = statement.getTransaction().getMonitoringData().getChangedTables();
         } else if ( logicalRoot.kind == SqlKind.UPDATE ) {
+            statement.getTransaction().getMonitoringData().setSqlKind( logicalRoot.kind );
             statement.getTransaction().getMonitoringData().addChangedTables( logicalRoot.rel.getTable().getQualifiedName() );
         } else {
             System.out.println( "None of the above, SqlKind: " + logicalRoot.kind );

@@ -28,6 +28,7 @@ import org.polypheny.db.catalog.Catalog;
 import org.polypheny.db.catalog.exceptions.UnknownDatabaseException;
 import org.polypheny.db.jdbc.PolyphenyDbSignature;
 import org.polypheny.db.rel.RelRoot;
+import org.polypheny.db.sql.SqlKind;
 import org.polypheny.db.transaction.Statement;
 
 
@@ -54,6 +55,7 @@ public abstract class StatementEvent extends BaseEvent {
     protected List<Long> accessedPartitions;
     protected List<String> changedTables = new ArrayList<>();
     protected HashMap<String, Integer> rowCountPerTable = new HashMap<>();
+    protected SqlKind sqlKind;
 
     @Override
     public abstract <T extends MonitoringDataPoint> List<Class<T>> getMetrics();
@@ -102,8 +104,5 @@ public abstract class StatementEvent extends BaseEvent {
             rowCountPerTable.put( tableId, tableSize );
         }
     }
-
-
-    ;
 
 }

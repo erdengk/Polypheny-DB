@@ -29,6 +29,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.polypheny.db.monitoring.events.MonitoringDataPoint;
+import org.polypheny.db.sql.SqlKind;
 
 
 @Getter
@@ -52,6 +53,7 @@ public class DmlDataPoint implements MonitoringDataPoint, Serializable {
     private List<String> fieldNames;
     private List<Long> accessedPartitions;
     private List<String> changedTables;
+    protected SqlKind sqlKind;
 
 
     @Override

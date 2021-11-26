@@ -4028,22 +4028,29 @@ public class Crud implements InformationObserver {
             try {
                 Iterator<?> iterator = signature.enumerable( statement.getDataContext() ).iterator();
                 Object object;
-                while ( iterator.hasNext() ) {
-                    object = iterator.next();
-                    int num;
-                    if ( object != null && object.getClass().isArray() ) {
-                        Object[] o = (Object[]) object;
-                        num = ((Number) o[0]).intValue();
-                    } else if ( object != null ) {
-                        num = ((Number) object).intValue();
-                    } else {
-                        throw new QueryExecutionException( "Result is null" );
+
+                //it is possible to check how many rows are inserted in the data context
+                //information from iterator is not correct for all stores
+                if ( statement.getTransaction().getMonitoringData().getSqlKind() == SqlKind.INSERT ) {
+                    rowsChanged = statement.getDataContext().getParameterValues().size();
+                } else {
+                    while ( iterator.hasNext() ) {
+                        object = iterator.next();
+                        int num;
+                        if ( object != null && object.getClass().isArray() ) {
+                            Object[] o = (Object[]) object;
+                            num = ((Number) o[0]).intValue();
+                        } else if ( object != null ) {
+                            num = ((Number) object).intValue();
+                        } else {
+                            throw new QueryExecutionException( "Result is null" );
+                        }
+                        // Check if num is equal for all adapters
+                        if ( rowsChanged != -1 && rowsChanged != num ) {
+                            //throw new QueryExecutionException( "The number of changed rows is not equal for all stores!" );
+                        }
+                        rowsChanged = num;
                     }
-                    // Check if num is equal for all adapters
-                    if ( rowsChanged != -1 && rowsChanged != num ) {
-                        //throw new QueryExecutionException( "The number of changed rows is not equal for all stores!" );
-                    }
-                    rowsChanged = num;
                 }
             } catch ( RuntimeException e ) {
                 if ( e.getCause() != null ) {
