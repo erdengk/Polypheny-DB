@@ -59,6 +59,7 @@ import org.apache.calcite.avatica.remote.TypedValue;
 import org.apache.calcite.avatica.util.Unsafe;
 import org.apache.calcite.linq4j.Enumerable;
 import org.apache.calcite.linq4j.Linq4j;
+import org.polypheny.db.StatisticEnumerableWrapper;
 import org.polypheny.db.adapter.DataContext;
 import org.polypheny.db.catalog.Catalog;
 import org.polypheny.db.catalog.Catalog.Pattern;
@@ -1255,30 +1256,8 @@ public class DbmsMeta implements ProtobufMeta {
             resultSets = ImmutableList.of( resultSet );
             commit( connection.getHandle() );
         } else if ( statementHandle.getSignature().statementType == StatementType.IS_DML ) {
-            Iterator<?> iterator = statementHandle.getSignature().enumerable( statementHandle.getStatement().getDataContext() ).iterator();
-            Object object = null;
-            int rowsChanged = -1;
-            while ( iterator.hasNext() ) {
-                object = iterator.next();
-                int num;
-                if ( object == null ) {
-                    throw new NullPointerException();
-                } else if ( object.getClass().isArray() ) {
-                    num = ((Number) ((Object[]) object)[0]).intValue();
-                } else {
-                    num = ((Number) object).intValue();
-                }
-                // Check if num is equal for all adapters
-                /*if ( rowsChanged != -1 && rowsChanged != num ) {
-                    throw new RuntimeException( "The number of changed rows is not equal for all stores!" );
-                }*/
-                rowsChanged = num;
-            }
 
-            // Some stores do not correctly report the number of changed rows (set to zero to avoid assertion error in the MetaResultSet.count() method)
-            if ( rowsChanged < 0 ) {
-                rowsChanged = 0;
-            }
+            int rowsChanged = new StatisticEnumerableWrapper( statementHandle.getSignature().enumerable( statementHandle.getStatement().getDataContext() ).iterator(), statementHandle.getStatement() ).getRowsChanged();
 
             MetaResultSet metaResultSet = MetaResultSet.count( h.connectionId, h.id, rowsChanged );
             resultSets = ImmutableList.of( metaResultSet );

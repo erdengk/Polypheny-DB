@@ -28,7 +28,7 @@ import org.polypheny.db.catalog.Catalog;
 import org.polypheny.db.catalog.exceptions.UnknownDatabaseException;
 import org.polypheny.db.jdbc.PolyphenyDbSignature;
 import org.polypheny.db.rel.RelRoot;
-import org.polypheny.db.sql.SqlKind;
+import org.polypheny.db.transaction.PolyXid;
 import org.polypheny.db.transaction.Statement;
 
 
@@ -43,6 +43,7 @@ public abstract class StatementEvent extends BaseEvent {
     protected String monitoringType;
     protected RelRoot routed;
     protected PolyphenyDbSignature signature;
+    private PolyXid xid;
     protected Statement statement;
     protected List<List<Object>> rows;
     protected String description;
@@ -55,7 +56,12 @@ public abstract class StatementEvent extends BaseEvent {
     protected List<Long> accessedPartitions;
     protected List<String> changedTables = new ArrayList<>();
     protected HashMap<String, Integer> rowCountPerTable = new HashMap<>();
-    protected SqlKind sqlKind;
+    protected int rowsChanged;
+    protected long tableId;
+    protected boolean isCommitted;
+    protected int indexSize;
+    protected boolean hasIndex;
+
 
     @Override
     public abstract <T extends MonitoringDataPoint> List<Class<T>> getMetrics();
@@ -92,7 +98,6 @@ public abstract class StatementEvent extends BaseEvent {
                 }
 
                 this.changedTables.add( name );
-                System.out.println( "changed Tables, qualifiedTableName: " + name );
             }
 
         }
@@ -103,6 +108,15 @@ public abstract class StatementEvent extends BaseEvent {
         if ( !rowCountPerTable.containsKey( tableId ) ) {
             rowCountPerTable.put( tableId, tableSize );
         }
+    }
+
+
+    public void committedXID( PolyXid id ) {
+        if ( xid != null ) {
+            isCommitted = xid.equals( id );
+
+        }
+
     }
 
 }

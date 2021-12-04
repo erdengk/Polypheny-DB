@@ -94,6 +94,7 @@ import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringEscapeUtils;
 import org.apache.commons.lang3.time.StopWatch;
 import org.eclipse.jetty.websocket.api.Session;
+import org.polypheny.db.StatisticEnumerableWrapper;
 import org.polypheny.db.adapter.Adapter;
 import org.polypheny.db.adapter.Adapter.AbstractAdapterSetting;
 import org.polypheny.db.adapter.Adapter.AbstractAdapterSettingDirectory;
@@ -3770,7 +3771,7 @@ public class Crud implements InformationObserver {
 
             ArrayList<String[]> data = computeResultData( rows, header, statement.getTransaction() );
 
-            statement.getTransaction().getMonitoringData().setRowCount( data.size() );
+            // statement.getTransaction().getMonitoringData().setRowCount( data.size() );
             MonitoringServiceProvider.getInstance().monitorEvent( statement.getTransaction().getMonitoringData() );
 
             if ( tableType != null ) {
@@ -4022,36 +4023,14 @@ public class Crud implements InformationObserver {
         }
 
         if ( signature.statementType == StatementType.OTHER_DDL ) {
+            StatementEvent ev = statement.getTransaction().getMonitoringData();
+            MonitoringServiceProvider.getInstance().monitorEvent( ev );
             return 1;
         } else if ( signature.statementType == StatementType.IS_DML ) {
             int rowsChanged = -1;
             try {
-                Iterator<?> iterator = signature.enumerable( statement.getDataContext() ).iterator();
-                Object object;
+                rowsChanged = new StatisticEnumerableWrapper( signature.enumerable( statement.getDataContext() ).iterator(), statement ).getRowsChanged();
 
-                //it is possible to check how many rows are inserted in the data context
-                //information from iterator is not correct for all stores
-                if ( statement.getTransaction().getMonitoringData().getSqlKind() == SqlKind.INSERT ) {
-                    rowsChanged = statement.getDataContext().getParameterValues().size();
-                } else {
-                    while ( iterator.hasNext() ) {
-                        object = iterator.next();
-                        int num;
-                        if ( object != null && object.getClass().isArray() ) {
-                            Object[] o = (Object[]) object;
-                            num = ((Number) o[0]).intValue();
-                        } else if ( object != null ) {
-                            num = ((Number) object).intValue();
-                        } else {
-                            throw new QueryExecutionException( "Result is null" );
-                        }
-                        // Check if num is equal for all adapters
-                        if ( rowsChanged != -1 && rowsChanged != num ) {
-                            //throw new QueryExecutionException( "The number of changed rows is not equal for all stores!" );
-                        }
-                        rowsChanged = num;
-                    }
-                }
             } catch ( RuntimeException e ) {
                 if ( e.getCause() != null ) {
                     throw new QueryExecutionException( e.getCause().getMessage(), e );

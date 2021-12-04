@@ -29,6 +29,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.polypheny.db.monitoring.events.MonitoringDataPoint;
+import org.polypheny.db.transaction.PolyXid;
 
 
 @Getter
@@ -42,6 +43,7 @@ public class QueryDataPoint implements MonitoringDataPoint, Serializable {
 
     private final List<String> tables = new ArrayList<>();
     private final HashMap<String, Object> dataElements = new HashMap<>();
+    private PolyXid xid;
     private UUID Id;
     private Timestamp recordedTimestamp;
     private String monitoringType;
@@ -51,7 +53,8 @@ public class QueryDataPoint implements MonitoringDataPoint, Serializable {
     private int rowCount;
     private List<String> fieldNames;
     private List<Long> accessedPartitions;
-    protected HashMap<String, Integer> rowCountPerTable = new HashMap<>();
+    protected HashMap<String, Integer> rowCountPerTable;
+    protected boolean isCommitted;
 
 
     @Override

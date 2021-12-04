@@ -27,6 +27,7 @@ import org.apache.calcite.avatica.MetaImpl;
 import org.polypheny.db.catalog.entity.CatalogSchema;
 import org.polypheny.db.catalog.entity.CatalogTable;
 import org.polypheny.db.jdbc.PolyphenyDbSignature;
+import org.polypheny.db.monitoring.events.StatementEvent;
 import org.polypheny.db.processing.QueryProcessor;
 import org.polypheny.db.rel.RelNode;
 import org.polypheny.db.rel.RelRoot;
@@ -85,7 +86,7 @@ public abstract class Index {
     /**
      * Trigger an index rebuild, e.g. at crash recovery.
      */
-    public void rebuild( final Transaction transaction ) {
+    public void rebuild( final Transaction transaction, StatementEvent statementEvent ) {
         Statement statement = transaction.createStatement();
 
         // Prepare query
@@ -113,10 +114,15 @@ public abstract class Index {
                 kv.add( new Pair<>( row, row ) );
             }
         }
+        statementEvent.setIndexSize( rows.size() );
+        statementEvent.setHasIndex( true );
+        System.out.println( "test" );
         // Rebuild index
         this.clear();
         this.insertAll( kv );
         this.initialize();
+
+
     }
 
 

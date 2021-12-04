@@ -52,6 +52,7 @@ import org.polypheny.db.information.InformationManager;
 import org.polypheny.db.information.InformationPage;
 import org.polypheny.db.information.InformationTable;
 import org.polypheny.db.information.InformationText;
+import org.polypheny.db.monitoring.events.StatementEvent;
 import org.polypheny.db.transaction.PolyXid;
 import org.polypheny.db.transaction.Statement;
 import org.polypheny.db.transaction.Transaction;
@@ -186,11 +187,15 @@ public class IndexManager {
                 pk.getColumnNames() );
         indexById.put( id, index );
         indexByName.put( name, index );
+
+        StatementEvent statementEvent = statement.getTransaction().getMonitoringData();
+        statementEvent.setTableId( table.id );
+
         final Transaction tx = statement != null
                 ? statement.getTransaction()
                 : transactionManager.startTransaction( "pa", "APP", false, "Index Manager" );
         try {
-            index.rebuild( tx );
+            index.rebuild( tx, statementEvent );
             if ( statement == null ) {
                 tx.commit();
             }

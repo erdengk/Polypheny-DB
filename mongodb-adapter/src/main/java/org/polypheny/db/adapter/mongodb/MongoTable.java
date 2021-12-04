@@ -60,6 +60,7 @@ import org.apache.calcite.linq4j.Enumerator;
 import org.apache.calcite.linq4j.Queryable;
 import org.apache.calcite.linq4j.function.Function1;
 import org.bson.BsonDocument;
+import org.bson.BsonString;
 import org.bson.Document;
 import org.bson.conversions.Bson;
 import org.bson.json.JsonMode;
@@ -251,6 +252,11 @@ public class MongoTable extends AbstractQueryableTable implements TranslatableTa
         if ( log.isDebugEnabled() ) {
             log.debug( list.stream().map( el -> el.toBsonDocument().toJson( JsonWriterSettings.builder().outputMode( JsonMode.SHELL ).build() ) ).collect( Collectors.joining( ",\n" ) ) );
         }
+
+        //Document res = this.mongoSchema.database.runCommand( new BsonDocument().append( "dbStats", new BsonInt32( 1 ) ) );
+        Document res = this.mongoSchema.database.runCommand( new BsonDocument().append( "collStats", new BsonString( collectionName ) ) );
+        System.out.println( res.toJson() );
+
         //list.forEach( el -> System.out.println( el.toBsonDocument().toJson( JsonWriterSettings.builder().outputMode( JsonMode.SHELL ).build() ) ) );
         return new AbstractEnumerable<Object>() {
             @Override

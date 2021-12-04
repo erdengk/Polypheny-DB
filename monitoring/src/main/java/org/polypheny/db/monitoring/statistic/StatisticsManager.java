@@ -108,7 +108,7 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
     protected final PropertyChangeSupport listeners = new PropertyChangeSupport( this );
 
 
-    protected HashMap<String, Integer> rowCountPerTable = new HashMap<>();
+    protected ConcurrentHashMap<String, Integer> rowCountPerTable = new ConcurrentHashMap<>();
 
 
     @Setter
@@ -879,6 +879,40 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
                 rowCountPerTable.put( k.replaceAll( "\"", "" ), v );
             }
         } );
+    }
+
+
+    public void updateRowCountPerTable( String name, int number, boolean isAdding ) {
+        if ( isAdding ) {
+            if ( rowCountPerTable.containsKey( name ) ) {
+                int totalRows = rowCountPerTable.remove( name ) + number;
+                rowCountPerTable.put( name, totalRows );
+            } else {
+                rowCountPerTable.put( name, number );
+            }
+        } else {
+            if ( rowCountPerTable.containsKey( name ) ) {
+                int totalRows = rowCountPerTable.remove( name ) - number;
+                rowCountPerTable.put( name, totalRows );
+            } else {
+                rowCountPerTable.put( name, 0 );
+            }
+        }
+    }
+
+
+    public void setIndexSize( String name, int indexSize ) {
+        if ( rowCountPerTable.containsKey( name ) ) {
+            int numberOfRows = rowCountPerTable.remove( name );
+            if ( numberOfRows == indexSize ) {
+                System.out.println( "it is the same!!!!" );
+            } else {
+                System.out.println( "show me that difference index: " + indexSize + " saved: " + numberOfRows );
+                rowCountPerTable.put( name, numberOfRows );
+            }
+        } else {
+            rowCountPerTable.put( name, indexSize );
+        }
     }
 
 

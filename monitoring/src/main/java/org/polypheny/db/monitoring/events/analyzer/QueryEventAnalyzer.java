@@ -33,6 +33,7 @@ public class QueryEventAnalyzer {
                 .builder()
                 .description( queryEvent.getDescription() )
                 .monitoringType( queryEvent.getMonitoringType() )
+                .xid( queryEvent.getXid() )
                 .Id( queryEvent.getId() )
                 .fieldNames( queryEvent.getFieldNames() )
                 .executionTime( queryEvent.getExecutionTime() )
@@ -41,6 +42,7 @@ public class QueryEventAnalyzer {
                 .recordedTimestamp( queryEvent.getRecordedTimestamp() )
                 .accessedPartitions( queryEvent.getAccessedPartitions() )
                 .rowCountPerTable( queryEvent.getRowCountPerTable() )
+                .isCommitted( queryEvent.isCommitted() )
                 .build();
 
         RelRoot relRoot = queryEvent.getRouted();

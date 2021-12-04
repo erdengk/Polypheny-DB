@@ -19,10 +19,10 @@ package org.polypheny.db.monitoring.persistence;
 import java.sql.Timestamp;
 import java.util.List;
 import lombok.NonNull;
+import org.polypheny.db.catalog.Catalog;
 import org.polypheny.db.monitoring.events.MonitoringDataPoint;
 import org.polypheny.db.monitoring.events.MonitoringDataPoint.DataPointType;
 import org.polypheny.db.monitoring.events.metrics.DmlDataPoint;
-import org.polypheny.db.monitoring.events.metrics.QueryDataPoint;
 import org.polypheny.db.monitoring.statistic.StatisticsManager;
 
 public class StatisticRepository implements MonitoringRepository {
@@ -38,9 +38,29 @@ public class StatisticRepository implements MonitoringRepository {
     public void persistDataPoint( @NonNull MonitoringDataPoint dataPoint ) {
         StatisticsManager<?> statisticsManager = StatisticsManager.getInstance();
         if ( dataPoint.getPointType() == DataPointType.DML ) {
-            ((DmlDataPoint) dataPoint).getChangedTables().forEach( statisticsManager::addTablesToUpdate );
+            //((DmlDataPoint) dataPoint).getChangedTables().forEach( statisticsManager::addTablesToUpdate );
+
+            DmlDataPoint dmlDataPoint = ((DmlDataPoint) dataPoint);
+
+            if ( dmlDataPoint.isCommitted() ) {
+                String name = Catalog.getInstance().getTable( dmlDataPoint.getTableId() ).name;
+
+                if ( dmlDataPoint.getMonitoringType().equals( "INSERT" ) ) {
+                    int added = dmlDataPoint.getRowsChanged();
+                    statisticsManager.updateRowCountPerTable( name, added, true );
+                } else if ( dmlDataPoint.getMonitoringType().equals( "DELETE" ) ) {
+                    int deleted = dmlDataPoint.getRowsChanged();
+                    statisticsManager.updateRowCountPerTable( name, deleted, false );
+                }
+
+                if ( dmlDataPoint.isHasIndex() ) {
+                    statisticsManager.setIndexSize( name, dmlDataPoint.getIndexSize() );
+                }
+
+            }
+
         } else if ( dataPoint.getPointType() == DataPointType.QUERY ) {
-            statisticsManager.rowCounts( ((QueryDataPoint) dataPoint).getRowCountPerTable() );
+            //statisticsManager.rowCounts( ((QueryDataPoint) dataPoint).getRowCountPerTable() );
         }
 
 

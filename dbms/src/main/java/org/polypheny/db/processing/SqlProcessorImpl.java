@@ -69,6 +69,7 @@ import org.polypheny.db.sql.SqlLiteral;
 import org.polypheny.db.sql.SqlNode;
 import org.polypheny.db.sql.SqlNodeList;
 import org.polypheny.db.sql.SqlUtil;
+import org.polypheny.db.sql.ddl.SqlAlterTable;
 import org.polypheny.db.sql.ddl.SqlDropMaterializedView;
 import org.polypheny.db.sql.ddl.SqlDropTable;
 import org.polypheny.db.sql.ddl.SqlDropView;
@@ -302,6 +303,8 @@ public class SqlProcessorImpl implements SqlProcessor, ViewExpander {
             } else if ( ((SqlDropMaterializedView) parsed).getName().names.size() == 1 ) {
                 StatisticsManager.getInstance().deleteTableToUpdate( "public." + ((SqlDropMaterializedView) parsed).getName().getSimple() );
             }
+        } else if ( parsed instanceof SqlAlterTable ) {
+
         }
     }
 

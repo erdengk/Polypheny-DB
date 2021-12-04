@@ -193,27 +193,15 @@ public abstract class AbstractQueryProcessor implements QueryProcessor {
             log.debug( "Preparing statement  ..." );
         }
 
+        //workload monitoring
         if ( statement.getTransaction().getMonitoringData() == null ) {
             if ( logicalRoot.kind.belongsTo( SqlKind.DML ) ) {
                 statement.getTransaction().setMonitoringData( new DmlEvent() );
-
             } else if ( logicalRoot.kind.belongsTo( SqlKind.QUERY ) ) {
                 statement.getTransaction().setMonitoringData( new QueryEvent() );
             }
         }
-
-        //information for statistics
-        if ( logicalRoot.kind == SqlKind.DELETE ) {
-            statement.getTransaction().getMonitoringData().addChangedTables( logicalRoot.rel.getTable().getQualifiedName() );
-        } else if ( logicalRoot.kind == SqlKind.INSERT ) {
-            statement.getTransaction().getMonitoringData().setSqlKind( logicalRoot.kind );
-            statement.getTransaction().getMonitoringData().addChangedTables( logicalRoot.rel.getTable().getQualifiedName() );
-        } else if ( logicalRoot.kind == SqlKind.UPDATE ) {
-            statement.getTransaction().getMonitoringData().setSqlKind( logicalRoot.kind );
-            statement.getTransaction().getMonitoringData().addChangedTables( logicalRoot.rel.getTable().getQualifiedName() );
-        } else {
-            System.out.println( "None of the above, SqlKind: " + logicalRoot.kind );
-        }
+        statement.getTransaction().getMonitoringData().setXid( statement.getTransaction().getXid() );
 
         stopWatch.start();
 
@@ -364,14 +352,17 @@ public abstract class AbstractQueryProcessor implements QueryProcessor {
 
                 if ( statement.getTransaction().getMonitoringData() != null ) {
                     StatementEvent eventData = statement.getTransaction().getMonitoringData();
-                    eventData.setMonitoringType( parameterizedRoot.kind.sql );
+                    eventData.setMonitoringType( parameterizedRoot.kind.toString() );
                     eventData.setDescription( "Test description: " + signature.statementType.toString() );
                     eventData.setRouted( logicalRoot );
                     eventData.setFieldNames( ImmutableList.copyOf( signature.rowType.getFieldNames() ) );
                     //eventData.setRows( MetaImpl.collect( signature.cursorFactory, iterator, new ArrayList<>() ) );
                     eventData.setAnalyze( isAnalyze );
                     eventData.setSubQuery( isSubquery );
-                    //eventData.setDurations( statement.getProcessingDuration().asJson() );
+                    eventData.setDurations( statement.getProcessingDuration().asJson() );
+
+                    //add statistic information to workload monitor
+                    addStatisticalInformation( eventData, logicalRoot, statement, signature, visitor );
                 }
 
                 return signature;
@@ -454,17 +445,50 @@ public abstract class AbstractQueryProcessor implements QueryProcessor {
         TransactionImpl transaction = (TransactionImpl) statement.getTransaction();
         if ( transaction.getMonitoringData() != null ) {
             StatementEvent eventData = transaction.getMonitoringData();
-            eventData.setMonitoringType( parameterizedRoot.kind.sql );
+
+            eventData.setMonitoringType( parameterizedRoot.kind.toString() );
             eventData.setDescription( "Test description: " + signature.statementType.toString() );
             eventData.setRouted( logicalRoot );
             eventData.setFieldNames( ImmutableList.copyOf( signature.rowType.getFieldNames() ) );
             //eventData.setRows( MetaImpl.collect( signature.cursorFactory, iterator, new ArrayList<>() ) );
             eventData.setAnalyze( isAnalyze );
             eventData.setSubQuery( isSubquery );
-            //eventData.setDurations( statement.getProcessingDuration().asJson() );
+            eventData.setDurations( statement.getProcessingDuration().asJson() );
+
+            //add statistic information to workload monitor
+            addStatisticalInformation( eventData, logicalRoot, statement, signature, visitor );
+
         }
 
         return signature;
+    }
+
+
+    private void addStatisticalInformation( StatementEvent eventData, RelRoot logicalRoot, Statement statement, PolyphenyDbSignature signature, TableUpdateVisitor visitor ) {
+
+        if ( logicalRoot.kind == SqlKind.INSERT || logicalRoot.kind == SqlKind.DELETE || logicalRoot.kind == SqlKind.UPDATE ) {
+            if ( visitor.getNames().size() > 1 ) {
+                try {
+                    CatalogTable catalogTable = Catalog.getInstance().getTable( 1, visitor.getNames().get( 0 ), visitor.getNames().get( 1 ) );
+                    long id = catalogTable.id;
+                    eventData.setTableId( id );
+                } catch ( Exception e ) {
+                    e.printStackTrace();
+                }
+            }
+        }
+
+        //information for statistics
+        if ( logicalRoot.kind == SqlKind.INSERT ) {
+            eventData.addChangedTables( logicalRoot.rel.getTable().getQualifiedName() );
+        } else if ( logicalRoot.kind == SqlKind.UPDATE || logicalRoot.kind == SqlKind.DELETE ) {
+            eventData.addChangedTables( logicalRoot.rel.getTable().getQualifiedName() );
+
+        } else if ( logicalRoot.kind == SqlKind.SELECT ) {
+
+        } else {
+
+        }
     }
 
 

@@ -163,7 +163,10 @@ public class TransactionImpl implements Transaction, Comparable {
             }
 
             if ( changedTables.size() > 0 ) {
-           //     StatisticsManager.getInstance().apply( changedTables );
+                //     StatisticsManager.getInstance().apply( changedTables );
+            }
+            if ( this.getMonitoringData() != null ) {
+                this.getMonitoringData().committedXID( this.xid );
             }
 
             IndexManager.getInstance().commit( this.xid );
@@ -182,6 +185,7 @@ public class TransactionImpl implements Transaction, Comparable {
 
         // Handover information about commit to Materialized Manager
         MaterializedViewManager.getInstance().updateCommittedXid( xid );
+
         //StatisticsManager.getInstance().updateCommittedXid( xid );
     }
 

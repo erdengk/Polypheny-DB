@@ -33,6 +33,7 @@ public class DmlEventAnalyzer {
                 .builder()
                 .description( dmlEvent.getDescription() )
                 .monitoringType( dmlEvent.getMonitoringType() )
+                .xid( dmlEvent.getXid() )
                 .Id( dmlEvent.getId() )
                 .fieldNames( dmlEvent.getFieldNames() )
                 .executionTime( dmlEvent.getExecutionTime() )
@@ -41,7 +42,11 @@ public class DmlEventAnalyzer {
                 .recordedTimestamp( dmlEvent.getRecordedTimestamp() )
                 .accessedPartitions( dmlEvent.getAccessedPartitions() )
                 .changedTables( dmlEvent.getChangedTables() )
-                .sqlKind( dmlEvent.getSqlKind() )
+                .rowsChanged( dmlEvent.getRowsChanged() )
+                .tableId( dmlEvent.getTableId() )
+                .isCommitted( dmlEvent.isCommitted() )
+                .hasIndex( dmlEvent.isHasIndex() )
+                .indexSize( dmlEvent.getIndexSize() )
                 .build();
 
         RelRoot relRoot = dmlEvent.getRouted();
