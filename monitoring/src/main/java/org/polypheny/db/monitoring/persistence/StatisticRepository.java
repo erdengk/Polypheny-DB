@@ -42,7 +42,7 @@ public class StatisticRepository implements MonitoringRepository {
 
             DmlDataPoint dmlDataPoint = ((DmlDataPoint) dataPoint);
 
-            if ( dmlDataPoint.isCommitted() ) {
+            if ( dmlDataPoint.isCommitted() && Catalog.getInstance().checkIfExistsTable( dmlDataPoint.getTableId() ) ) {
                 String name = Catalog.getInstance().getTable( dmlDataPoint.getTableId() ).name;
 
                 if ( dmlDataPoint.getMonitoringType().equals( "INSERT" ) ) {
@@ -56,7 +56,6 @@ public class StatisticRepository implements MonitoringRepository {
                 if ( dmlDataPoint.isHasIndex() ) {
                     statisticsManager.setIndexSize( name, dmlDataPoint.getIndexSize() );
                 }
-
             }
 
         } else if ( dataPoint.getPointType() == DataPointType.QUERY ) {

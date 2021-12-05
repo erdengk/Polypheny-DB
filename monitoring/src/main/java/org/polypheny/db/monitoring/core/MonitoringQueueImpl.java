@@ -33,6 +33,7 @@ import lombok.val;
 import org.polypheny.db.config.RuntimeConfig;
 import org.polypheny.db.monitoring.events.MonitoringDataPoint.DataPointType;
 import org.polypheny.db.monitoring.events.MonitoringEvent;
+import org.polypheny.db.monitoring.events.metrics.DmlDataPoint;
 import org.polypheny.db.monitoring.persistence.MonitoringRepository;
 import org.polypheny.db.util.background.BackgroundTask;
 import org.polypheny.db.util.background.BackgroundTask.TaskSchedulingType;
@@ -183,14 +184,13 @@ public class MonitoringQueueImpl implements MonitoringQueue {
                     if ( dataPoint.getPointType() == DataPointType.QUERY ) {
                         this.statisticRepository.persistDataPoint( dataPoint );
                     }
-                    /*
+
                     if ( dataPoint.getPointType() == DataPointType.DML ) {
                         if ( (!((DmlDataPoint) dataPoint).getChangedTables().isEmpty())  || ((DmlDataPoint) dataPoint).isHasIndex() ) {
                             this.statisticRepository.persistDataPoint( dataPoint );
                         }
-
                     }
-                     */
+
                 }
 
                 countEvents++;
