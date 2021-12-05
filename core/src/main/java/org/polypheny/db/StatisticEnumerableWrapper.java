@@ -19,6 +19,7 @@ package org.polypheny.db;
 import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.Getter;
+import org.polypheny.db.monitoring.events.StatementEvent;
 import org.polypheny.db.transaction.Statement;
 
 public class StatisticEnumerableWrapper<T> implements Iterator<T> {
@@ -68,7 +69,9 @@ public class StatisticEnumerableWrapper<T> implements Iterator<T> {
             }
             rowsChanged = statement.getDataContext().getParameterValues().size();
         }
-        statement.getTransaction().getMonitoringData().setRowsChanged( rowsChanged );
+        StatementEvent ev = statement.getTransaction().getMonitoringData();
+        ev.setRowsChanged( rowsChanged ); // for statistics to count total amount of rows
+        ev.setRowCount( rowsChanged ); // for workload monitoring
     }
 
 

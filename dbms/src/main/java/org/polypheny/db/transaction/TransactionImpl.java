@@ -38,6 +38,7 @@ import org.polypheny.db.catalog.entity.CatalogUser;
 import org.polypheny.db.config.RuntimeConfig;
 import org.polypheny.db.information.InformationManager;
 import org.polypheny.db.jdbc.JavaTypeFactoryImpl;
+import org.polypheny.db.monitoring.core.MonitoringServiceProvider;
 import org.polypheny.db.monitoring.events.StatementEvent;
 import org.polypheny.db.prepare.PolyphenyDbCatalogReader;
 import org.polypheny.db.processing.DataMigrator;
@@ -167,6 +168,7 @@ public class TransactionImpl implements Transaction, Comparable {
             }
             if ( this.getMonitoringData() != null ) {
                 this.getMonitoringData().committedXID( this.xid );
+                MonitoringServiceProvider.getInstance().monitorEvent( this.getMonitoringData() );
             }
 
             IndexManager.getInstance().commit( this.xid );

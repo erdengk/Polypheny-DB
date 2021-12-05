@@ -158,6 +158,7 @@ import org.polypheny.db.information.InformationPage;
 import org.polypheny.db.information.InformationStacktrace;
 import org.polypheny.db.information.InformationText;
 import org.polypheny.db.jdbc.PolyphenyDbSignature;
+import org.polypheny.db.monitoring.core.MonitoringService;
 import org.polypheny.db.monitoring.core.MonitoringServiceProvider;
 import org.polypheny.db.monitoring.events.DmlEvent;
 import org.polypheny.db.monitoring.events.QueryEvent;
@@ -4023,8 +4024,6 @@ public class Crud implements InformationObserver {
         }
 
         if ( signature.statementType == StatementType.OTHER_DDL ) {
-            StatementEvent ev = statement.getTransaction().getMonitoringData();
-            MonitoringServiceProvider.getInstance().monitorEvent( ev );
             return 1;
         } else if ( signature.statementType == StatementType.IS_DML ) {
             int rowsChanged = -1;
@@ -4038,11 +4037,6 @@ public class Crud implements InformationObserver {
                     throw new QueryExecutionException( e.getMessage(), e );
                 }
             }
-
-            StatementEvent ev = statement.getTransaction().getMonitoringData();
-            ev.setRowCount( rowsChanged );
-
-            MonitoringServiceProvider.getInstance().monitorEvent( ev );
 
             return rowsChanged;
         } else {

@@ -1280,10 +1280,7 @@ public class DbmsMeta implements ProtobufMeta {
                 throw new AvaticaRuntimeException( message == null ? "null" : message, -1, "", AvaticaSeverity.ERROR );
             }
         }
-        if ( statementHandle.getStatement().getTransaction().getMonitoringData() != null ) {
-            StatementEvent ev = statementHandle.getStatement().getTransaction().getMonitoringData();
-            MonitoringServiceProvider.getInstance().monitorEvent( ev );
-        }
+
         return resultSets;
     }
 

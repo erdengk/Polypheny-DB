@@ -71,7 +71,7 @@ public class QueryDataPoint implements MonitoringDataPoint, Serializable {
 
     @Override
     public DataPointType getPointType() {
-        return DataPointType.QUERY;
+        return DataPointType.DQL;
     }
 
 }

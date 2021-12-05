@@ -36,7 +36,7 @@ public interface MonitoringDataPoint extends Serializable {
 
     enum DataPointType {
         DML,
-        QUERY;
+        DQL;
     }
 
 }

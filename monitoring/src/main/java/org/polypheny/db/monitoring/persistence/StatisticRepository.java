@@ -58,7 +58,7 @@ public class StatisticRepository implements MonitoringRepository {
                 }
             }
 
-        } else if ( dataPoint.getPointType() == DataPointType.QUERY ) {
+        } else if ( dataPoint.getPointType() == DataPointType.DQL ) {
             //statisticsManager.rowCounts( ((QueryDataPoint) dataPoint).getRowCountPerTable() );
         }
 
