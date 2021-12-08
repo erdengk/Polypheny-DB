@@ -17,7 +17,6 @@
 package org.polypheny.db.monitoring.statistic;
 
 
-import com.google.common.collect.ImmutableList;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
@@ -27,7 +26,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -38,11 +36,9 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.math.NumberUtils;
 import org.polypheny.db.catalog.Catalog;
-import org.polypheny.db.catalog.entity.CatalogTable;
 import org.polypheny.db.catalog.exceptions.GenericCatalogException;
 import org.polypheny.db.catalog.exceptions.UnknownDatabaseException;
 import org.polypheny.db.catalog.exceptions.UnknownSchemaException;
-import org.polypheny.db.catalog.exceptions.UnknownTableException;
 import org.polypheny.db.catalog.exceptions.UnknownUserException;
 import org.polypheny.db.config.Config;
 import org.polypheny.db.config.Config.ConfigListener;
@@ -64,18 +60,14 @@ import org.polypheny.db.rel.logical.LogicalAggregate;
 import org.polypheny.db.rel.logical.LogicalProject;
 import org.polypheny.db.rel.logical.LogicalSort;
 import org.polypheny.db.rel.logical.LogicalTableScan;
-import org.polypheny.db.rel.logical.LogicalValues;
 import org.polypheny.db.rel.type.RelDataType;
-import org.polypheny.db.rel.type.RelDataTypeField;
 import org.polypheny.db.rex.RexBuilder;
 import org.polypheny.db.rex.RexLiteral;
 import org.polypheny.db.sql.SqlAggFunction;
 import org.polypheny.db.sql.fun.SqlStdOperatorTable;
 import org.polypheny.db.tools.RelBuilder;
-import org.polypheny.db.transaction.PolyXid;
 import org.polypheny.db.transaction.Statement;
 import org.polypheny.db.transaction.Transaction;
-import org.polypheny.db.transaction.TransactionException;
 import org.polypheny.db.type.PolyType;
 import org.polypheny.db.type.PolyTypeFamily;
 import org.polypheny.db.util.DateTimeStringUtils;
@@ -104,36 +96,28 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
 
     private int buffer = RuntimeConfig.STATISTIC_BUFFER.getInteger();
 
-    Queue<String> tablesToUpdate = new ConcurrentLinkedQueue<>();
-    protected final PropertyChangeSupport listeners = new PropertyChangeSupport( this );
-
-
-    protected ConcurrentHashMap<String, Integer> rowCountPerTable = new ConcurrentHashMap<>();
-
-
     @Setter
     @Getter
     private String revalId = null;
 
-    Map<PolyXid, Long> potentialInteresting;
-    Map<Long, List<RelNode>> insertedData;
-    Map<Long, List<RelNode>> deletedData;
-    Map<Long, List<RelNode>> updatedData;
-    ImmutableList<ImmutableList<RexLiteral>> columnInformation;
-    List<RelDataTypeField> fieldlist;
+    //new Additions for additional Information
+    Queue<String> tablesToUpdate = new ConcurrentLinkedQueue<>();
+    protected final PropertyChangeSupport listeners = new PropertyChangeSupport( this );
+
+    protected ConcurrentHashMap<String, Integer> rowCountPerTable = new ConcurrentHashMap<>();
+
+    @Getter
+    protected HashMap<Long, ArrayList<StatInfo<?>>> statCache;
     private List<String> deletedTable = new ArrayList<>();
 
 
     private StatisticsManager() {
         this.statisticSchemaMap = new ConcurrentHashMap<>();
-        this.potentialInteresting = new HashMap<>();
         displayInformation();
         registerTaskTracking();
         registerIsFullTracking();
 
-        this.insertedData = new HashMap<>();
-        this.deletedData = new HashMap<>();
-        this.updatedData = new HashMap<>();
+        this.statCache = new HashMap<>();
         this.listeners.addPropertyChangeListener( this );
     }
 
@@ -141,9 +125,10 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
     public void addTablesToUpdate( String table ) {
         if ( !tablesToUpdate.contains( table ) ) {
             tablesToUpdate.add( table );
-            listeners.firePropertyChange( "testTableUpdate", null, table );
+            listeners.firePropertyChange( "tablesToUpdate", null, table );
         }
     }
+
 
 
     /**
@@ -195,6 +180,7 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
      *
      * @return the statisticColumn which matches the criteria
      */
+    /*
     private StatisticColumn<T> getColumn( String schema, String table, String column ) {
         if ( this.statisticSchemaMap.containsKey( schema ) ) {
             if ( this.statisticSchemaMap.get( schema ).containsKey( table ) ) {
@@ -206,6 +192,8 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
         return null;
     }
 
+     */
+
 
     /**
      * Adds a new column to the tracked columns and sorts it correctly
@@ -213,6 +201,7 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
      * @param qualifiedColumn column name
      * @param type the type of the new column
      */
+    /*
     private void addColumn( String qualifiedColumn, PolyType type ) {
         String[] splits = QueryColumn.getSplitColumn( qualifiedColumn );
         if ( type.getFamily() == PolyTypeFamily.NUMERIC ) {
@@ -223,7 +212,7 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
             put( splits[0], splits[1], splits[2], new TemporalStatisticColumn<>( splits, type ) );
         }
     }
-
+     */
 
     /**
      * Reset all statistics and reevaluate them
@@ -238,7 +227,7 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
         for ( QueryColumn column : this.sqlQueryInterface.getAllColumns() ) {
             StatisticColumn<T> col = reevaluateColumn( column );
             if ( col != null ) {
-                put( statisticSchemaMapCopy, column.getSchema(), column.getTable(), column.getName(), col );
+                put( statisticSchemaMapCopy, column, col );
             }
 
         }
@@ -249,7 +238,7 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
 
     private void resetAllIsFull() {
         this.statisticSchemaMap.values().forEach( s -> s.values().forEach( t -> t.values().forEach( c -> {
-            assignUnique( c, this.getUniqueValues( c.getQualifiedTableName(), c.getQualifiedColumnName(), c.getType() ) );
+            assignUnique( c, this.getUniqueValues( new QueryColumn( c.getSchemaId(), c.getTableId(), c.getColumnId(), c.getType() ) ) );
         } ) ) );
     }
 
@@ -293,12 +282,10 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
             for ( QueryColumn column : res ) {
                 StatisticColumn<T> col = reevaluateColumn( column );
                 if ( col != null ) {
-                    put( column.getSchema(), column.getTable(), column.getName(), col );
+                    put( column, col );
                 }
 
             }
-        } else {
-            return;
         }
 
     }
@@ -347,7 +334,7 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
         StatisticQueryColumn min = this.getAggregateColumn( column, "MIN" );
         StatisticQueryColumn max = this.getAggregateColumn( column, "MAX" );
         Integer count = this.getCount( column );
-        NumericalStatisticColumn<T> statisticColumn = new NumericalStatisticColumn<>( QueryColumn.getSplitColumn( column.getQualifiedColumnName() ), column.getType() );
+        NumericalStatisticColumn<T> statisticColumn = new NumericalStatisticColumn<>( column );
         if ( min != null ) {
             //noinspection unchecked
             statisticColumn.setMin( (T) min.getData()[0] );
@@ -371,7 +358,7 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
         StatisticQueryColumn max = this.getAggregateColumn( column, "MAX" );
         Integer count = this.getCount( column );
 
-        TemporalStatisticColumn<T> statisticColumn = new TemporalStatisticColumn<>( QueryColumn.getSplitColumn( column.getQualifiedColumnName() ), column.getType() );
+        TemporalStatisticColumn<T> statisticColumn = new TemporalStatisticColumn<>( column );
         if ( min != null ) {
             if ( NumberUtils.isParsable( min.getData()[0] ) ) {
                 //noinspection unchecked
@@ -431,12 +418,22 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
         StatisticQueryColumn unique = this.getUniqueValues( column );
         Integer count = this.getCount( column );
 
-        AlphabeticStatisticColumn<T> statisticColumn = new AlphabeticStatisticColumn<>( QueryColumn.getSplitColumn( column.getQualifiedColumnName() ), column.getType() );
+        AlphabeticStatisticColumn<T> statisticColumn = new AlphabeticStatisticColumn<>( column );
         assignUnique( statisticColumn, unique );
         statisticColumn.setCount( count );
 
         return statisticColumn;
 
+    }
+
+
+    private void put( QueryColumn queryColumn, StatisticColumn<T> statisticColumn ) {
+        put( this.statisticSchemaMap, queryColumn.getSchema(), queryColumn.getTable(), queryColumn.getColumn(), statisticColumn );
+    }
+
+
+    private void put( ConcurrentHashMap<String, HashMap<String, HashMap<String, StatisticColumn<T>>>> statisticSchemaMapCopy, QueryColumn queryColumn, StatisticColumn<T> statisticColumn ) {
+        put( statisticSchemaMapCopy, queryColumn.getSchema(), queryColumn.getTable(), queryColumn.getColumn(), statisticColumn );
     }
 
 
@@ -459,29 +456,12 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
     }
 
 
-    private void put( String schema, String table, String column, StatisticColumn<T> statisticColumn ) {
-        put( this.statisticSchemaMap, schema, table, column, statisticColumn );
-
-    }
-
-
-    /**
-     * Method to get a generic Aggregate Stat
-     * null if no result is available
-     *
-     * @return a StatQueryColumn which contains the requested value
-     */
-    private StatisticQueryColumn getAggregateColumn( QueryColumn column, String aggregate ) {
-        return getAggregateColumn( column.getSchema(), column.getTable(), column.getName(), aggregate, column );
-    }
-
-
     /**
      * Queries the database with a aggregate query
      *
      * @param aggregate the aggregate function to us
      */
-    private StatisticQueryColumn getAggregateColumn( String schema, String table, String column, String aggregate, QueryColumn queryColumn ) {
+    private StatisticQueryColumn getAggregateColumn( QueryColumn queryColumn, String aggregate ) {
 
         Transaction transaction = getTransaction();
         Statement statement = transaction.createStatement();
@@ -490,11 +470,16 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
         final RexBuilder rexBuilder = relBuilder.getRexBuilder();
         final RelOptCluster cluster = RelOptCluster.create( statement.getQueryProcessor().getPlanner(), rexBuilder );
 
-        LogicalTableScan tableScan = getLogicalTableScan( StatisticQueryProcessor.buildQualifiedName( queryColumn.getSchema(), queryColumn.getTable() ), reader, cluster );
+        LogicalTableScan tableScan = getLogicalTableScan( queryColumn.getSchema(), queryColumn.getTable(), reader, cluster );
 
         for ( int i = 0; i < tableScan.getRowType().getFieldNames().size(); i++ ) {
-            if ( tableScan.getRowType().getFieldNames().get( i ).equals( StatisticQueryProcessor.buildQualifiedName( queryColumn.getSchema(), queryColumn.getTable(), queryColumn.getName() ).replaceAll( "\"", "" ).split( "\\." )[2] ) ) {
-                LogicalProject logicalProject = LogicalProject.create( tableScan, Collections.singletonList( rexBuilder.makeInputRef( tableScan, i ) ), Collections.singletonList( tableScan.getRowType().getFieldNames().get( i ) ) );
+            //todo IG: check if right
+            if ( tableScan.getRowType().getFieldNames().get( i ).equals( queryColumn.getColumn() ) ) {
+                LogicalProject logicalProject = LogicalProject.create(
+                        tableScan,
+                        Collections.singletonList( rexBuilder.makeInputRef( tableScan, i ) ),
+                        Collections.singletonList( tableScan.getRowType().getFieldNames().get( i ) ) );
+
                 SqlAggFunction operator = null;
                 if ( aggregate.equals( "MAX" ) ) {
                     operator = SqlStdOperatorTable.MAX;
@@ -533,7 +518,7 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
                         Collections.singletonList( ImmutableBitSet.of() ),
                         Collections.singletonList( aggregateCall ) );
 
-                return this.sqlQueryInterface.selectOneStatWithRel( relNode, transaction, statement );
+                return this.sqlQueryInterface.selectOneStatWithRel( relNode, transaction, statement, queryColumn );
 
             }
         }
@@ -541,19 +526,7 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
     }
 
 
-    /**
-     * Gets the configured amount + 1 of unique values per column
-     *
-     * @return the unique values
-     */
-    private StatisticQueryColumn getUniqueValues( QueryColumn column ) {
-        String qualifiedTableName = StatisticQueryProcessor.buildQualifiedName( column.getSchema(), column.getTable() );
-        String qualifiedColumnName = StatisticQueryProcessor.buildQualifiedName( column.getSchema(), column.getTable(), column.getName() );
-        return getUniqueValues( qualifiedTableName, qualifiedColumnName, column.getType() );
-    }
-
-
-    private StatisticQueryColumn getUniqueValues( String qualifiedTableName, String qualifiedColumnName, PolyType polyType ) {
+    private StatisticQueryColumn getUniqueValues( QueryColumn queryColumn ) {
 
         Transaction transaction = getTransaction();
         Statement statement = transaction.createStatement();
@@ -562,20 +535,30 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
         final RexBuilder rexBuilder = relBuilder.getRexBuilder();
         final RelOptCluster cluster = RelOptCluster.create( statement.getQueryProcessor().getPlanner(), rexBuilder );
 
-        LogicalTableScan tableScan = getLogicalTableScan( qualifiedTableName, reader, cluster );
+        LogicalTableScan tableScan = getLogicalTableScan( queryColumn.getSchema(), queryColumn.getTable(), reader, cluster );
 
         RelNode relNode;
         for ( int i = 0; i < tableScan.getRowType().getFieldNames().size(); i++ ) {
-            if ( tableScan.getRowType().getFieldNames().get( i ).equals( qualifiedColumnName.replaceAll( "\"", "" ).split( "\\." )[2] ) ) {
-                LogicalProject logicalProject = LogicalProject.create( tableScan, Collections.singletonList( rexBuilder.makeInputRef( tableScan, i ) ), Collections.singletonList( tableScan.getRowType().getFieldNames().get( i ) ) );
+            if ( tableScan.getRowType().getFieldNames().get( i ).equals( queryColumn.getColumn() ) ) {
+                LogicalProject logicalProject = LogicalProject.create(
+                        tableScan,
+                        Collections.singletonList( rexBuilder.makeInputRef( tableScan, i ) ),
+                        Collections.singletonList( tableScan.getRowType().getFieldNames().get( i ) ) );
 
-                LogicalAggregate logicalAggregate = LogicalAggregate.create( logicalProject, ImmutableBitSet.of( 0 ), Collections.singletonList( ImmutableBitSet.of( 0 ) ), Collections.emptyList() );
+                LogicalAggregate logicalAggregate = LogicalAggregate.create(
+                        logicalProject, ImmutableBitSet.of( 0 ),
+                        Collections.singletonList( ImmutableBitSet.of( 0 ) ),
+                        Collections.emptyList() );
 
                 Pair<BigDecimal, PolyType> valuePair = new Pair<>( new BigDecimal( (int) 6 ), PolyType.DECIMAL );
 
-                relNode = LogicalSort.create( logicalAggregate, RelCollations.of(), null, new RexLiteral( valuePair.left, rexBuilder.makeInputRef( tableScan, i ).getType(), valuePair.right ) );
+                relNode = LogicalSort.create(
+                        logicalAggregate,
+                        RelCollations.of(),
+                        null,
+                        new RexLiteral( valuePair.left, rexBuilder.makeInputRef( tableScan, i ).getType(), valuePair.right ) );
 
-                return this.sqlQueryInterface.selectOneStatWithRel( relNode, transaction, statement );
+                return this.sqlQueryInterface.selectOneStatWithRel( relNode, transaction, statement, queryColumn );
             }
         }
         return null;
@@ -592,6 +575,7 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
         return transaction;
     }
 
+    /*
 
     private void commitTransaction( Transaction transaction ) {
         try {
@@ -607,19 +591,20 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
     }
 
 
-    private LogicalTableScan getLogicalTableScan( String qualifiedTableName, CatalogReader reader, RelOptCluster cluster ) {
-        String[] tables = qualifiedTableName.replaceAll( "\"", "" ).split( "\\." );
-        RelOptTable table = reader.getTable( Arrays.asList( tables[0], tables[1] ) );
-        return LogicalTableScan.create( cluster, table );
+     */
+
+
+    private LogicalTableScan getLogicalTableScan( String schema, String table, CatalogReader reader, RelOptCluster cluster ) {
+
+        RelOptTable relOptTable = reader.getTable( Arrays.asList( schema, table ) );
+        return LogicalTableScan.create( cluster, relOptTable );
     }
 
 
     /**
      * Gets the amount of entries for a column
      */
-    private Integer getCount( QueryColumn column ) {
-        String tableName = StatisticQueryProcessor.buildQualifiedName( column.getSchema(), column.getTable() );
-        String columnName = StatisticQueryProcessor.buildQualifiedName( column.getSchema(), column.getTable(), column.getName() );
+    private Integer getCount( QueryColumn queryColumn ) {
 
         Transaction transaction = getTransaction();
         Statement statement = transaction.createStatement();
@@ -628,39 +613,46 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
         final RexBuilder rexBuilder = relBuilder.getRexBuilder();
         final RelOptCluster cluster = RelOptCluster.create( statement.getQueryProcessor().getPlanner(), rexBuilder );
 
-        LogicalTableScan tableScan = getLogicalTableScan( tableName, reader, cluster );
+        LogicalTableScan tableScan = getLogicalTableScan( queryColumn.getSchema(), queryColumn.getTable(), reader, cluster );
 
         for ( int i = 0; i < tableScan.getRowType().getFieldNames().size(); i++ ) {
-            if ( tableScan.getRowType().getFieldNames().get( i ).equals( columnName.replaceAll( "\"", "" ).split( "\\." )[2] ) ) {
-                LogicalProject logicalProject = LogicalProject.create( tableScan, Collections.singletonList( rexBuilder.makeInputRef( tableScan, i ) ), Collections.singletonList( tableScan.getRowType().getFieldNames().get( i ) ) );
+            if ( tableScan.getRowType().getFieldNames().get( i ).equals( queryColumn.getColumn() ) ) {
+                LogicalProject logicalProject = LogicalProject.create(
+                        tableScan,
+                        Collections.singletonList( rexBuilder.makeInputRef( tableScan, i ) ),
+                        Collections.singletonList( tableScan.getRowType().getFieldNames().get( i ) ) );
 
-                AggregateCall aggregateCall = AggregateCall.create( SqlStdOperatorTable.COUNT, false, false, Collections.singletonList( 0 ), -1, RelCollations.EMPTY, cluster.getTypeFactory().createTypeWithNullability( cluster.getTypeFactory().createPolyType( PolyType.BIGINT ), false ), "min-max" );
+                AggregateCall aggregateCall = AggregateCall.create(
+                        SqlStdOperatorTable.COUNT,
+                        false,
+                        false,
+                        Collections.singletonList( 0 ),
+                        -1,
+                        RelCollations.EMPTY,
+                        cluster.getTypeFactory().createTypeWithNullability(
+                                cluster.getTypeFactory().createPolyType( PolyType.BIGINT ),
+                                false ),
+                        "min-max" );
 
-                RelNode relNode = LogicalAggregate.create( logicalProject, ImmutableBitSet.of(), Collections.singletonList( ImmutableBitSet.of() ), Collections.singletonList( aggregateCall ) );
+                RelNode relNode = LogicalAggregate.create(
+                        logicalProject,
+                        ImmutableBitSet.of(),
+                        Collections.singletonList( ImmutableBitSet.of() ),
+                        Collections.singletonList( aggregateCall ) );
 
-                StatisticQueryColumn res = this.sqlQueryInterface.selectOneStatWithRel( relNode, transaction, statement );
+                StatisticQueryColumn res = this.sqlQueryInterface.selectOneStatWithRel( relNode, transaction, statement, queryColumn );
 
                 if ( res != null && res.getData() != null && res.getData().length != 0 ) {
                     try {
                         return Integer.parseInt( res.getData()[0] );
                     } catch ( NumberFormatException e ) {
-                        log.error( "Count could not be parsed for column {}.", column.getQualifiedColumnName(), e );
+                        log.error( "Count could not be parsed for column {}.", queryColumn.getColumn(), e );
                     }
                 }
 
             }
         }
         return 0;
-    }
-
-
-    private String getStatQueryLimit() {
-        return getStatQueryLimit( 0 );
-    }
-
-
-    private String getStatQueryLimit( int add ) {
-        return " LIMIT " + (RuntimeConfig.STATISTIC_BUFFER.getInteger() + add);
     }
 
 
@@ -778,11 +770,13 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
     }
 
 
+
     /**
      * Reevaluates all tables which received changes impacting their statistic data
      *
      * @param changedTables all tables which got changed in a transaction
      */
+     /*
     public void apply( List<String> changedTables ) {
         threadPool.execute( () -> changedTables.forEach( this::reevaluateTable ) );
     }
@@ -791,61 +785,7 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
     public void applyTable( String changedQualifiedTable ) {
         this.reevaluateTable( changedQualifiedTable );
     }
-
-
-    public void changedTables( Transaction transaction, List<String> tableNames, Map<List<String>, List<RelNode>> inserted, Map<List<String>, List<RelNode>> deleted, Map<List<String>, List<RelNode>> updated ) {
-        if ( tableNames.size() > 1 ) {
-            try {
-                CatalogTable catalogTable = Catalog.getInstance().getTable( 1, tableNames.get( 0 ), tableNames.get( 1 ) );
-                long id = catalogTable.id;
-                insertedData.put( id, inserted.get( tableNames ) );
-                deletedData.put( id, deleted.get( tableNames ) );
-                updatedData.put( id, updated.get( tableNames ) );
-
-                potentialInteresting.put( transaction.getXid(), id );
-            } catch ( UnknownTableException e ) {
-                throw new RuntimeException( "Not possible to getTable to update which Tables were changed.", e );
-            }
-        }
-    }
-
-
-    public void updateCommittedXid( PolyXid xid ) {
-        if ( potentialInteresting.containsKey( xid ) ) {
-            updateStatistics( potentialInteresting.remove( xid ) );
-        }
-    }
-
-
-    private void updateStatistics( Long tableId ) {
-        if ( insertedData.containsKey( tableId ) ) {
-            List<RelNode> relNodes = insertedData.get( tableId );
-
-            for ( RelNode relNode : relNodes ) {
-                getDataTuples( relNode );
-            }
-
-
-        } else if ( deletedData.containsKey( tableId ) ) {
-
-        } else if ( updatedData.containsKey( tableId ) ) {
-
-        }
-    }
-
-
-    int count = 0;
-
-
-    private void getDataTuples( RelNode relNode ) {
-        if ( relNode instanceof LogicalValues ) {
-            columnInformation = ((LogicalValues) relNode).tuples;
-            fieldlist = relNode.getRowType().getFieldList();
-            System.out.println( "How often AM I here: " + count++ );
-        } else {
-            relNode.getInputs().forEach( this::getDataTuples );
-        }
-    }
+      */
 
 
     @Override
@@ -871,7 +811,7 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
         }
     }
 
-
+/*
     public void rowCounts( HashMap<String, Integer> rowCountTable ) {
 
         rowCountTable.forEach( ( k, v ) -> {
@@ -880,6 +820,9 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
             }
         } );
     }
+
+
+ */
 
 
     public void updateRowCountPerTable( String name, int number, boolean isAdding ) {
@@ -907,8 +850,8 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
             if ( numberOfRows == indexSize ) {
                 System.out.println( "it is the same!!!!" );
             } else {
-                System.out.println( "show me that difference index: " + indexSize + " saved: " + numberOfRows );
-                rowCountPerTable.put( name, numberOfRows );
+                //avg of the two rowcounts
+                rowCountPerTable.put( name, ((numberOfRows + indexSize) / 2) );
             }
         } else {
             rowCountPerTable.put( name, indexSize );

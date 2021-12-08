@@ -14,32 +14,8 @@
  * limitations under the License.
  */
 
-package org.polypheny.db.monitoring.events;
+package org.polypheny.db.monitoring.statistic;
 
-import java.io.Serializable;
-import java.sql.Timestamp;
-import java.util.HashMap;
-import java.util.List;
-import java.util.UUID;
-
-
-/**
- * Marker interface for the persistent metric type, which can be monitored.
- * A MonitoringEvent will be analyzed and create metric objects.
- */
-public interface MonitoringDataPoint extends Serializable {
-
-    UUID id();
-
-    Timestamp timestamp();
-
-    DataPointType getPointType();
-
-    HashMap<Long, List<Object>> changedValues();
-
-    enum DataPointType {
-        DML,
-        DQL;
-    }
-
+public enum StatInfoType {
+    MIN, MAX, UNIQUE, NULLS;
 }

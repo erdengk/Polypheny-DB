@@ -47,6 +47,7 @@ public class DmlEventAnalyzer {
                 .isCommitted( dmlEvent.isCommitted() )
                 .hasIndex( dmlEvent.isHasIndex() )
                 .indexSize( dmlEvent.getIndexSize() )
+                .changedVals( dmlEvent.getChangedVals() )
                 .build();
 
         RelRoot relRoot = dmlEvent.getRouted();

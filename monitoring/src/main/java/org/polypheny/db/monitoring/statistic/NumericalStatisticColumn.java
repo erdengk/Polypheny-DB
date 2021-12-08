@@ -22,7 +22,6 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.polypheny.db.config.RuntimeConfig;
-import org.polypheny.db.type.PolyType;
 
 
 /**
@@ -46,13 +45,8 @@ public class NumericalStatisticColumn<T extends Comparable<T>> extends Statistic
     private T max;
 
 
-    public NumericalStatisticColumn( String schema, String table, String column, PolyType type ) {
-        super( schema, table, column, type );
-    }
-
-
-    public NumericalStatisticColumn( String[] splitColumn, PolyType type ) {
-        super( splitColumn, type );
+    public NumericalStatisticColumn( QueryColumn column ) {
+        super( column.getSchemaId(), column.getTableId(), column.getColumnId(), column.getType() );
     }
 
 

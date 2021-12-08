@@ -23,7 +23,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.calcite.avatica.ColumnMetaData;
 import org.apache.calcite.avatica.MetaImpl;
 import org.apache.calcite.linq4j.Enumerable;
 import org.polypheny.db.catalog.Catalog;
@@ -80,8 +79,8 @@ public class StatisticQueryProcessor {
     }
 
 
-    public StatisticQueryColumn selectOneStatWithRel( RelNode relNode, Transaction transaction, Statement statement ) {
-        StatisticResult res = this.executeRel( relNode, transaction, statement );
+    public StatisticQueryColumn selectOneStatWithRel( RelNode relNode, Transaction transaction, Statement statement, QueryColumn queryColumn ) {
+        StatisticResult res = this.executeRel( relNode, transaction, statement, queryColumn );
         if ( res.getColumns() != null && res.getColumns().length == 1 ) {
             return res.getColumns()[0];
         }
@@ -127,7 +126,7 @@ public class StatisticQueryProcessor {
         List<QueryColumn> columns = new ArrayList<>();
 
         List<CatalogColumn> catalogColumns = catalog.getColumns( new Pattern( databaseName ), null, null, null );
-        columns.addAll( catalogColumns.stream().map( c -> new QueryColumn( c.getSchemaName(), c.getTableName(), c.name, c.type ) ).collect( Collectors.toList() ) );
+        columns.addAll( catalogColumns.stream().map( c -> new QueryColumn( c.schemaId, c.tableId, c.id, c.type ) ).collect( Collectors.toList() ) );
 
         return columns;
     }
@@ -188,12 +187,12 @@ public class StatisticQueryProcessor {
     }
 
 
-    private StatisticResult executeRel( RelNode relNode, Transaction transaction, Statement statement ) {
+    private StatisticResult executeRel( RelNode relNode, Transaction transaction, Statement statement, QueryColumn queryColumn ) {
 
         StatisticResult result = new StatisticResult();
 
         try {
-            result = executeRel( statement, relNode );
+            result = executeRel( statement, relNode, queryColumn );
             transaction.commit();
         } catch ( TransactionException | QueryExecutionException e ) {
             log.error( "Caught exception while executing a query from the console", e );
@@ -221,7 +220,7 @@ public class StatisticQueryProcessor {
     // -----------------------------------------------------------------------
 
 
-    private StatisticResult executeRel( Statement statement, RelNode relNode ) throws QueryExecutionException {
+    private StatisticResult executeRel( Statement statement, RelNode relNode, QueryColumn queryColumn ) throws QueryExecutionException {
         PolyphenyDbSignature signature;
         List<List<Object>> rows;
         Iterator<Object> iterator = null;
@@ -251,6 +250,7 @@ public class StatisticQueryProcessor {
         }
 
         try {
+            /*
             List<PolyType> types = new ArrayList<>();
             List<String> names = new ArrayList<>();
             for ( ColumnMetaData metaData : signature.columns ) {
@@ -259,6 +259,8 @@ public class StatisticQueryProcessor {
                 names.add( metaData.schemaName + "." + metaData.tableName + "." + metaData.columnName );
             }
 
+
+             */
             List<String[]> data = new ArrayList<>();
             for ( List<Object> row : rows ) {
                 String[] temp = new String[row.size()];
@@ -279,7 +281,7 @@ public class StatisticQueryProcessor {
             statement.getTransaction().getMonitoringData().setRowCount( data.size() );
             MonitoringServiceProvider.getInstance().monitorEvent( statement.getTransaction().getMonitoringData() );
 
-            return new StatisticResult( names, types, d );
+            return new StatisticResult( queryColumn, d );
         } finally {
             try {
                 if ( iterator instanceof AutoCloseable ) {

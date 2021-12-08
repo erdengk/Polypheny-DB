@@ -74,4 +74,10 @@ public class QueryDataPoint implements MonitoringDataPoint, Serializable {
         return DataPointType.DQL;
     }
 
+
+    @Override
+    public HashMap<Long, List<Object>> changedValues() {
+        return null;
+    }
+
 }

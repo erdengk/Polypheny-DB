@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
+import org.polypheny.db.catalog.Catalog;
 import org.polypheny.db.type.PolyType;
 
 
@@ -41,6 +42,16 @@ public abstract class StatisticColumn<T extends Comparable<T>> {
     @Expose
     @Getter
     private final String column;
+
+    @Getter
+    private Long schemaId;
+
+    @Getter
+    private Long tableId;
+
+    @Getter
+    private Long columnId;
+
 
     @Getter
     private final PolyType type;
@@ -63,7 +74,7 @@ public abstract class StatisticColumn<T extends Comparable<T>> {
     @Setter
     public int count;
 
-
+/*
     public StatisticColumn( String schema, String table, String column, PolyType type ) {
         this.schema = schema.replace( "\\", "" ).replace( "\"", "" );
         this.table = table.replace( "\\", "" ).replace( "\"", "" );
@@ -73,12 +84,32 @@ public abstract class StatisticColumn<T extends Comparable<T>> {
 
     }
 
+ */
 
-    StatisticColumn( String[] splitColumn, PolyType type ) {
-        this( splitColumn[0], splitColumn[1], splitColumn[2], type );
+
+    public StatisticColumn( Long schemaId, Long tableId, Long columnId, PolyType type ) {
+        this.schemaId = schemaId;
+        this.tableId = tableId;
+        this.columnId = columnId;
+        this.type = type;
+
+        Catalog catalog = Catalog.getInstance();
+        this.schema = catalog.getSchema( schemaId ).name;
+        this.table = catalog.getTable( tableId ).name;
+        this.column = catalog.getColumn( columnId ).name;
+
+        this.qualifiedColumnName = this.schema + "." + this.table + "." + this.column;
     }
 
 
+    /*
+        StatisticColumn( String[] splitColumn, PolyType type ) {
+            this( splitColumn[0], splitColumn[1], splitColumn[2], type );
+        }
+
+
+
+     */
     public String getQualifiedTableName() {
         return this.schema + "." + this.table;
     }

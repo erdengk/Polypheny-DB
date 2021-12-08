@@ -16,7 +16,11 @@
 
 package org.polypheny.db;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.Getter;
 import org.polypheny.db.monitoring.events.StatementEvent;
@@ -65,11 +69,44 @@ public class StatisticEnumerableWrapper<T> implements Iterator<T> {
             }
         } else if ( kind.equals( "INSERT" ) ) {
             while ( iterator.hasNext() ) {
-                object = iterator.next();
+                iterator.next();
             }
             rowsChanged = statement.getDataContext().getParameterValues().size();
         }
+
+        HashMap<Long, List<Object>> ordered = new HashMap<>();
+
+        List<Map<Long, Object>> values = statement.getDataContext().getParameterValues();
+        if ( values.size() > 0 ) {
+            for ( long i = 0; i < statement.getDataContext().getParameterValues().get( 0 ).size(); i++ ) {
+                ordered.put( i, new ArrayList<>() );
+            }
+        }
+
+        for ( Map<Long, Object> longObjectMap : statement.getDataContext().getParameterValues() ) {
+            longObjectMap.forEach( ( k, v ) -> {
+                ordered.get( k ).add( v );
+            } );
+        }
+
+        /*
+        Map<Long, List<Object>> interestingVals = new HashMap<>();
+
+        Map<Long, List<Object>> min = new HashMap<>();
+        Map<Long, List<Object>> max = new HashMap<>();
+
+        for ( Entry<Long, List<Object>> entry : ordered.entrySet() ) {
+            List<Object> list =  entry.getValue().stream().sorted().collect( Collectors.toList());
+            List<Object> merged = new ArrayList<>();
+            merged.addAll( list.subList( 0, 4 ) );
+            merged.addAll( list.subList(list.size()-5, list.size()-1)  );
+            min.put( entry.getKey(), list.subList( 0, 4 ) );
+            max.put( entry.getKey(), list.subList( list.size()-5, list.size()-1 ) );
+        }
+         */
+
         StatementEvent ev = statement.getTransaction().getMonitoringData();
+        ev.setChangedVals( ordered );
         ev.setRowsChanged( rowsChanged ); // for statistics to count total amount of rows
         ev.setRowCount( rowsChanged ); // for workload monitoring
     }

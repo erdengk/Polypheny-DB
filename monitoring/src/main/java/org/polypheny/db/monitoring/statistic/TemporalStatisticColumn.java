@@ -22,7 +22,6 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.polypheny.db.config.RuntimeConfig;
-import org.polypheny.db.type.PolyType;
 
 
 /**
@@ -51,15 +50,9 @@ public class TemporalStatisticColumn<T extends Comparable<T>> extends StatisticC
     private String temporalType;
 
 
-    public TemporalStatisticColumn( String schema, String table, String column, PolyType type ) {
-        super( schema, table, column, type );
-        temporalType = type.getFamily().name();
-    }
-
-
-    public TemporalStatisticColumn( String[] splitColumn, PolyType type ) {
-        super( splitColumn, type );
-        temporalType = type.getFamily().name();
+    public TemporalStatisticColumn( QueryColumn column ) {
+        super( column.getSchemaId(), column.getTableId(), column.getColumnId(), column.getType() );
+        temporalType = column.getType().getFamily().name();
     }
 
 

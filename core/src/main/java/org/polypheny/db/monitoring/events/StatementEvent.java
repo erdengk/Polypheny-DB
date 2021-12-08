@@ -61,6 +61,7 @@ public abstract class StatementEvent extends BaseEvent {
     protected boolean isCommitted;
     protected int indexSize;
     protected boolean hasIndex;
+    protected HashMap<Long, List<Object>> changedVals;
 
 
     @Override

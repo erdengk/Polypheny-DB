@@ -59,6 +59,7 @@ public class DmlDataPoint implements MonitoringDataPoint, Serializable {
     protected boolean isCommitted;
     protected int indexSize;
     protected boolean hasIndex;
+    protected HashMap<Long, List<Object>> changedVals;
 
 
     @Override
@@ -70,6 +71,12 @@ public class DmlDataPoint implements MonitoringDataPoint, Serializable {
     @Override
     public Timestamp timestamp() {
         return this.recordedTimestamp;
+    }
+
+
+    @Override
+    public HashMap<Long, List<Object>> changedValues() {
+        return this.changedVals;
     }
 
 

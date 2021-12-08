@@ -472,6 +472,7 @@ public abstract class AbstractQueryProcessor implements QueryProcessor {
                     CatalogTable catalogTable = Catalog.getInstance().getTable( 1, visitor.getNames().get( 0 ), visitor.getNames().get( 1 ) );
                     long id = catalogTable.id;
                     eventData.setTableId( id );
+
                 } catch ( Exception e ) {
                     e.printStackTrace();
                 }
