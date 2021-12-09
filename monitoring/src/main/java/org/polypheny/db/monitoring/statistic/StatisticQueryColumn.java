@@ -42,18 +42,5 @@ public class StatisticQueryColumn extends QueryColumn {
         this.data = data;
     }
 
-    /*
-    public StatisticQueryColumn( String schemaTableName, final PolyType type, final String[] data ) {
-        //super( schemaTableName, type );
-        this.data = data;
-    }
-
-
-    public StatisticQueryColumn( String schema, String table, String name, final PolyType type, final String[] data ) {
-        //super( schema, table, name, type );
-        this.data = data;
-    }
-
-     */
 
 }

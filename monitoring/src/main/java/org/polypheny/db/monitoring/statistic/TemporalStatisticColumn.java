@@ -19,6 +19,7 @@ package org.polypheny.db.monitoring.statistic;
 
 import com.google.gson.annotations.Expose;
 import java.util.List;
+import java.util.TreeSet;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -50,6 +51,11 @@ public class TemporalStatisticColumn<T extends Comparable<T>> extends StatisticC
     @Setter
     private String temporalType;
 
+    @Getter
+    public TreeSet<T> minCache = new TreeSet<>();
+    @Getter
+    public TreeSet<T> maxCache = new TreeSet<>();
+
 
     public TemporalStatisticColumn( QueryColumn column ) {
         super( column.getSchemaId(), column.getTableId(), column.getColumnId(), column.getType() );
@@ -57,12 +63,13 @@ public class TemporalStatisticColumn<T extends Comparable<T>> extends StatisticC
     }
 
 
-
     @Override
     public void insert( T val ) {
         if ( uniqueValues.size() < RuntimeConfig.STATISTIC_BUFFER.getInteger() ) {
             if ( !uniqueValues.contains( val ) ) {
                 uniqueValues.add( val );
+                minCache.add( val );
+                maxCache.add( val );
             }
         } else {
             isFull = true;
@@ -75,6 +82,21 @@ public class TemporalStatisticColumn<T extends Comparable<T>> extends StatisticC
         } else if ( val.compareTo( max ) > 0 ) {
             this.max = val;
         }
+
+        if ( minCache.last().compareTo( val ) > 0 ) {
+            if ( minCache.size() > RuntimeConfig.STATISTIC_BUFFER.getInteger() ) {
+                minCache.remove( minCache.last() );
+            }
+            minCache.add( val );
+        }
+
+        if ( maxCache.first().compareTo( val ) < 0 ) {
+            if ( minCache.size() > RuntimeConfig.STATISTIC_BUFFER.getInteger() ) {
+                maxCache.remove( maxCache.first() );
+            }
+            maxCache.add( val );
+        }
+
     }
 
 

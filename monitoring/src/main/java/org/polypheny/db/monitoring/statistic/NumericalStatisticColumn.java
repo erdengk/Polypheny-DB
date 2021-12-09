@@ -34,9 +34,6 @@ import org.polypheny.db.config.RuntimeConfig;
 public class NumericalStatisticColumn<T extends Comparable<T>> extends StatisticColumn<T> {
 
     @Expose
-    private final String columnType = "numeric";
-
-    @Expose
     @Getter
     @Setter
     private T min;
@@ -46,7 +43,9 @@ public class NumericalStatisticColumn<T extends Comparable<T>> extends Statistic
     @Setter
     private T max;
 
+    @Getter
     public TreeSet<T> minCache = new TreeSet<>();
+    @Getter
     public TreeSet<T> maxCache = new TreeSet<>();
 
 
@@ -86,13 +85,17 @@ public class NumericalStatisticColumn<T extends Comparable<T>> extends Statistic
         }
 
         if ( minCache.last().compareTo( val ) > 0 ) {
-            minCache.remove( minCache.last() );
+            if ( minCache.size() > RuntimeConfig.STATISTIC_BUFFER.getInteger() ) {
+                minCache.remove( minCache.last() );
+            }
             minCache.add( val );
         }
 
-        if ( maxCache.descendingSet().last().compareTo( val ) > 0 ) {
-            maxCache.descendingSet().remove( maxCache.descendingSet().last() );
-            maxCache.descendingSet().add( val );
+        if ( maxCache.first().compareTo( val ) < 0 ) {
+            if ( minCache.size() > RuntimeConfig.STATISTIC_BUFFER.getInteger() ) {
+                maxCache.remove( maxCache.first() );
+            }
+            maxCache.add( val );
         }
 
     }

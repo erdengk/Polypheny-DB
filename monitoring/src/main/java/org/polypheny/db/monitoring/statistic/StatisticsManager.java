@@ -137,9 +137,22 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
         if ( type.equals( "INSERT" ) ) {
             if ( this.statisticSchemaMap.get( catalogTable.schemaId ) != null ) {
                 if ( this.statisticSchemaMap.get( catalogTable.schemaId ).get( tableId ) != null ) {
-                    for ( Long column : columns ) {
-                        if ( this.statisticSchemaMap.get( catalogTable.schemaId ).get( tableId ).get( column ) != null ) {
+                    for ( int i = 0; i < columns.size(); i++ ) {
+                        PolyType polyType = catalog.getColumn( columns.get( i ) ).type;
+                        QueryColumn queryColumn = new QueryColumn( catalogTable.schemaId, catalogTable.id, columns.get( i ), polyType );
+                        if ( this.statisticSchemaMap.get( catalogTable.schemaId ).get( tableId ).get( columns.get( i ) ) != null ) {
+                            StatisticColumn<T> statisticColumn = this.statisticSchemaMap.get( catalogTable.schemaId ).get( tableId ).get( columns.get( i ) );
 
+                            if ( polyType.getFamily() == PolyTypeFamily.NUMERIC ) {
+                                ((NumericalStatisticColumn) statisticColumn).insert( changedValues.get( (long) i ) );
+                                put( queryColumn, statisticColumn );
+                            } else if ( polyType.getFamily() == PolyTypeFamily.CHARACTER ) {
+                                ((AlphabeticStatisticColumn) statisticColumn).insert( changedValues.get( (long) i ) );
+                                put( queryColumn, statisticColumn );
+                            } else if ( PolyType.DATETIME_TYPES.contains( polyType ) ) {
+                                ((TemporalStatisticColumn) statisticColumn).insert( changedValues.get( (long) i ) );
+                                put( queryColumn, statisticColumn );
+                            }
                         }
                     }
 
@@ -154,11 +167,11 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
                             put( queryColumn, numericalStatisticColumn );
                         } else if ( polyType.getFamily() == PolyTypeFamily.CHARACTER ) {
                             AlphabeticStatisticColumn alphabeticStatisticColumn = new AlphabeticStatisticColumn<T>( queryColumn );
-                            alphabeticStatisticColumn.insert( (T) changedValues.get( (long) i ) );
+                            alphabeticStatisticColumn.insert( changedValues.get( (long) i ) );
                             put( queryColumn, alphabeticStatisticColumn );
                         } else if ( PolyType.DATETIME_TYPES.contains( polyType ) ) {
                             TemporalStatisticColumn temporalStatisticColumn = new TemporalStatisticColumn<T>( queryColumn );
-                            temporalStatisticColumn.insert( (T) changedValues.get( (long) i ) );
+                            temporalStatisticColumn.insert( changedValues.get( (long) i ) );
                             put( queryColumn, temporalStatisticColumn );
                         }
 
@@ -179,6 +192,7 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
 
  */
     }
+
 
     /**
      * Registers if on configChange statistics are tracked and displayed or not
@@ -222,7 +236,6 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
         return instance;
     }
 
-
     /**
      * Gets the specific statisticColumn if it exists in the tracked columns
      * else null
@@ -243,7 +256,6 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
 
      */
 
-
     /**
      * Adds a new column to the tracked columns and sorts it correctly
      *
@@ -262,6 +274,7 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
         }
     }
      */
+
 
     /**
      * Reset all statistics and reevaluate them
@@ -601,24 +614,6 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
         return transaction;
     }
 
-    /*
-
-    private void commitTransaction( Transaction transaction ) {
-        try {
-            transaction.commit();
-        } catch ( TransactionException e ) {
-            log.error( "Caught exception while executing a query from the console", e );
-            try {
-                transaction.rollback();
-            } catch ( TransactionException ex ) {
-                log.error( "Caught exception while rollback", e );
-            }
-        }
-    }
-
-
-     */
-
 
     private LogicalTableScan getLogicalTableScan( String schema, String table, CatalogReader reader, RelOptCluster cluster ) {
 
@@ -745,7 +740,7 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
         InformationGroup cacheGroup = new InformationGroup( page, "Cache Information" );
         im.addGroup( cacheGroup );
 
-        InformationTable cacheInformation = new InformationTable( tableGroup, Arrays.asList( "Column Name", "Cache Values Min", "Cache Values Max" ) );
+        InformationTable cacheInformation = new InformationTable( cacheGroup, Arrays.asList( "Column Name", "Cache Values Min", "Cache Values Max" ) );
         im.registerInformation( cacheInformation );
 
         InformationGroup actionGroup = new InformationGroup( page, "Action" );
@@ -769,15 +764,19 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
 
                     if ( ((NumericalStatisticColumn<T>) v).getMin() != null && ((NumericalStatisticColumn<T>) v).getMax() != null ) {
                         numericalInformation.addRow( v.getQualifiedColumnName(), ((NumericalStatisticColumn<T>) v).getMin().toString(), ((NumericalStatisticColumn<T>) v).getMax().toString() );
-                        cacheInformation.addRow( v.getQualifiedColumnName(), ((NumericalStatisticColumn<T>) v).minCache.toString(), ((NumericalStatisticColumn<T>) v).maxCache.toString() );
+                        if ( !((NumericalStatisticColumn<T>) v).getMinCache().isEmpty() || !((NumericalStatisticColumn<T>) v).getMaxCache().isEmpty() ) {
+                            cacheInformation.addRow( v.getQualifiedColumnName(), ((NumericalStatisticColumn<T>) v).getMinCache().toString(), ((NumericalStatisticColumn<T>) v).getMaxCache().toString() );
+                        }
                     } else {
                         numericalInformation.addRow( v.getQualifiedColumnName(), "❌", "❌" );
                     }
-
                 }
                 if ( v instanceof TemporalStatisticColumn ) {
                     if ( ((TemporalStatisticColumn<T>) v).getMin() != null && ((TemporalStatisticColumn<T>) v).getMax() != null ) {
                         temporalInformation.addRow( v.getQualifiedColumnName(), ((TemporalStatisticColumn<T>) v).getMin().toString(), ((TemporalStatisticColumn<T>) v).getMax().toString() );
+                        if ( !((TemporalStatisticColumn<T>) v).getMinCache().isEmpty() || !((TemporalStatisticColumn<T>) v).getMaxCache().isEmpty() ) {
+                            cacheInformation.addRow( v.getQualifiedColumnName(), ((TemporalStatisticColumn<T>) v).getMinCache().toString(), ((TemporalStatisticColumn<T>) v).getMaxCache().toString() );
+                        }
                     } else {
                         temporalInformation.addRow( v.getQualifiedColumnName(), "❌", "❌" );
                     }
@@ -819,8 +818,6 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
         this.reevaluateTable( changedQualifiedTable );
     }
       */
-
-
     @Override
     public void propertyChange( PropertyChangeEvent evt ) {
         threadPool.execute( this::workQueue );

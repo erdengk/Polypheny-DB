@@ -17,8 +17,9 @@
 package org.polypheny.db.monitoring.statistic;
 
 
-import com.google.gson.annotations.Expose;
+import java.util.ArrayList;
 import java.util.List;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.polypheny.db.config.RuntimeConfig;
 
@@ -30,8 +31,9 @@ import org.polypheny.db.config.RuntimeConfig;
 @Slf4j
 public class AlphabeticStatisticColumn<T extends Comparable<T>> extends StatisticColumn<T> {
 
-    @Expose
-    private final String columnType = "alphabetic";
+    @Getter
+    public List<T> uniqueValuesCache = new ArrayList<>();
+    boolean cacheFull;
 
 
     public AlphabeticStatisticColumn( QueryColumn column ) {
@@ -47,6 +49,11 @@ public class AlphabeticStatisticColumn<T extends Comparable<T>> extends Statisti
             }
         } else {
             isFull = true;
+            if ( uniqueValuesCache.size() < (RuntimeConfig.STATISTIC_BUFFER.getInteger() * 2) ) {
+                uniqueValuesCache.add( val );
+            } else {
+                cacheFull = true;
+            }
         }
     }
 
