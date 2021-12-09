@@ -17,15 +17,12 @@
 package org.polypheny.db.monitoring.events;
 
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
-import org.polypheny.db.catalog.Catalog;
-import org.polypheny.db.catalog.exceptions.UnknownDatabaseException;
 import org.polypheny.db.jdbc.PolyphenyDbSignature;
 import org.polypheny.db.rel.RelRoot;
 import org.polypheny.db.transaction.PolyXid;
@@ -54,7 +51,7 @@ public abstract class StatementEvent extends BaseEvent {
     protected boolean isSubQuery;
     protected String durations;
     protected List<Long> accessedPartitions;
-    protected List<String> changedTables = new ArrayList<>();
+    protected boolean tableChanged;
     protected HashMap<String, Integer> rowCountPerTable = new HashMap<>();
     protected int rowsChanged;
     protected long tableId;
@@ -77,7 +74,7 @@ public abstract class StatementEvent extends BaseEvent {
     @Override
     public abstract List<MonitoringDataPoint> analyze();
 
-
+/*
     public void addChangedTables( List<String> qualifiedTableName ) {
         if ( !this.changedTables.contains( qualifiedTableName ) ) {
             if ( log.isDebugEnabled() ) {
@@ -103,6 +100,9 @@ public abstract class StatementEvent extends BaseEvent {
 
         }
     }
+
+
+ */
 
 
     public void addRowCountPerTable( String tableId, int tableSize ) {

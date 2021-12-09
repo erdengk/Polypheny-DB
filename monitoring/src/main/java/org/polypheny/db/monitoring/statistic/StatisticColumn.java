@@ -44,14 +44,13 @@ public abstract class StatisticColumn<T extends Comparable<T>> {
     private final String column;
 
     @Getter
-    private Long schemaId;
+    private final Long schemaId;
 
     @Getter
-    private Long tableId;
+    private final Long tableId;
 
     @Getter
-    private Long columnId;
-
+    private final Long columnId;
 
     @Getter
     private final PolyType type;
@@ -74,18 +73,6 @@ public abstract class StatisticColumn<T extends Comparable<T>> {
     @Setter
     public int count;
 
-/*
-    public StatisticColumn( String schema, String table, String column, PolyType type ) {
-        this.schema = schema.replace( "\\", "" ).replace( "\"", "" );
-        this.table = table.replace( "\\", "" ).replace( "\"", "" );
-        this.column = column.replace( "\\", "" ).replace( "\"", "" );
-        this.type = type;
-        this.qualifiedColumnName = this.schema + "." + this.table + "." + this.column;
-
-    }
-
- */
-
 
     public StatisticColumn( Long schemaId, Long tableId, Long columnId, PolyType type ) {
         this.schemaId = schemaId;
@@ -102,14 +89,6 @@ public abstract class StatisticColumn<T extends Comparable<T>> {
     }
 
 
-    /*
-        StatisticColumn( String[] splitColumn, PolyType type ) {
-            this( splitColumn[0], splitColumn[1], splitColumn[2], type );
-        }
-
-
-
-     */
     public String getQualifiedTableName() {
         return this.schema + "." + this.table;
     }
@@ -117,5 +96,8 @@ public abstract class StatisticColumn<T extends Comparable<T>> {
 
     public abstract void insert( T val );
 
+    public abstract void insert( List<T> values );
+
     public abstract String toString();
+
 }

@@ -18,6 +18,8 @@ package org.polypheny.db.monitoring.statistic;
 
 
 import com.google.gson.annotations.Expose;
+import java.util.List;
+import java.util.TreeSet;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -44,9 +46,22 @@ public class NumericalStatisticColumn<T extends Comparable<T>> extends Statistic
     @Setter
     private T max;
 
+    public TreeSet<T> minCache = new TreeSet<>();
+    public TreeSet<T> maxCache = new TreeSet<>();
+
 
     public NumericalStatisticColumn( QueryColumn column ) {
         super( column.getSchemaId(), column.getTableId(), column.getColumnId(), column.getType() );
+
+    }
+
+
+    @Override
+    public void insert( List<T> values ) {
+        for ( T val : values ) {
+            insert( val );
+        }
+
     }
 
 
@@ -55,6 +70,8 @@ public class NumericalStatisticColumn<T extends Comparable<T>> extends Statistic
         if ( uniqueValues.size() < RuntimeConfig.STATISTIC_BUFFER.getInteger() ) {
             if ( !uniqueValues.contains( val ) ) {
                 uniqueValues.add( val );
+                minCache.add( val );
+                maxCache.add( val );
             }
         } else {
             isFull = true;
@@ -67,6 +84,17 @@ public class NumericalStatisticColumn<T extends Comparable<T>> extends Statistic
         } else if ( val.compareTo( max ) > 0 ) {
             this.max = val;
         }
+
+        if ( minCache.last().compareTo( val ) > 0 ) {
+            minCache.remove( minCache.last() );
+            minCache.add( val );
+        }
+
+        if ( maxCache.descendingSet().last().compareTo( val ) > 0 ) {
+            maxCache.descendingSet().remove( maxCache.descendingSet().last() );
+            maxCache.descendingSet().add( val );
+        }
+
     }
 
 
@@ -79,5 +107,6 @@ public class NumericalStatisticColumn<T extends Comparable<T>> extends Statistic
         statistics += "unique Value: " + uniqueValues.toString();
         return statistics;
     }
+
 
 }

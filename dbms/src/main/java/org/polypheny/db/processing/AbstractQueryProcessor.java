@@ -472,6 +472,7 @@ public abstract class AbstractQueryProcessor implements QueryProcessor {
                     CatalogTable catalogTable = Catalog.getInstance().getTable( 1, visitor.getNames().get( 0 ), visitor.getNames().get( 1 ) );
                     long id = catalogTable.id;
                     eventData.setTableId( id );
+                    eventData.setTableChanged( true );
 
                 } catch ( Exception e ) {
                     e.printStackTrace();
@@ -479,7 +480,9 @@ public abstract class AbstractQueryProcessor implements QueryProcessor {
             }
         }
 
+
         //information for statistics
+        /*
         if ( logicalRoot.kind == SqlKind.INSERT ) {
             eventData.addChangedTables( logicalRoot.rel.getTable().getQualifiedName() );
         } else if ( logicalRoot.kind == SqlKind.UPDATE || logicalRoot.kind == SqlKind.DELETE ) {
@@ -490,6 +493,9 @@ public abstract class AbstractQueryProcessor implements QueryProcessor {
         } else {
 
         }
+
+         */
+
     }
 
 

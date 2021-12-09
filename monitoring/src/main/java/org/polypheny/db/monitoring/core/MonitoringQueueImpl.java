@@ -186,7 +186,7 @@ public class MonitoringQueueImpl implements MonitoringQueue {
                     }
 
                     if ( dataPoint.getPointType() == DataPointType.DML ) {
-                        if ( (!((DmlDataPoint) dataPoint).getChangedTables().isEmpty())  || ((DmlDataPoint) dataPoint).isHasIndex() ) {
+                        if ( ((DmlDataPoint) dataPoint).isTableChanged() || ((DmlDataPoint) dataPoint).isHasIndex() ) {
                             this.statisticRepository.persistDataPoint( dataPoint );
                         }
                     }

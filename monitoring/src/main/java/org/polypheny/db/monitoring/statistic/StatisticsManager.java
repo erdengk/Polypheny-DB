@@ -36,6 +36,7 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.math.NumberUtils;
 import org.polypheny.db.catalog.Catalog;
+import org.polypheny.db.catalog.entity.CatalogTable;
 import org.polypheny.db.catalog.exceptions.GenericCatalogException;
 import org.polypheny.db.catalog.exceptions.UnknownDatabaseException;
 import org.polypheny.db.catalog.exceptions.UnknownSchemaException;
@@ -88,7 +89,7 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
     private static volatile StatisticsManager<?> instance = null;
 
     @Getter
-    public volatile ConcurrentHashMap<String, HashMap<String, HashMap<String, StatisticColumn<T>>>> statisticSchemaMap;
+    public volatile ConcurrentHashMap<Long, HashMap<Long, HashMap<Long, StatisticColumn<T>>>> statisticSchemaMap;
 
     private StatisticQueryProcessor sqlQueryInterface;
 
@@ -101,13 +102,11 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
     private String revalId = null;
 
     //new Additions for additional Information
-    Queue<String> tablesToUpdate = new ConcurrentLinkedQueue<>();
+    Queue<Long> tablesToUpdate = new ConcurrentLinkedQueue<>();
     protected final PropertyChangeSupport listeners = new PropertyChangeSupport( this );
 
     protected ConcurrentHashMap<String, Integer> rowCountPerTable = new ConcurrentHashMap<>();
 
-    @Getter
-    protected HashMap<Long, ArrayList<StatInfo<?>>> statCache;
     private List<String> deletedTable = new ArrayList<>();
 
 
@@ -117,19 +116,69 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
         registerTaskTracking();
         registerIsFullTracking();
 
-        this.statCache = new HashMap<>();
         this.listeners.addPropertyChangeListener( this );
     }
 
 
-    public void addTablesToUpdate( String table ) {
-        if ( !tablesToUpdate.contains( table ) ) {
-            tablesToUpdate.add( table );
-            listeners.firePropertyChange( "tablesToUpdate", null, table );
+    //use relNode to update
+    public void tablesToUpdate( Long tableId ) {
+        if ( !tablesToUpdate.contains( tableId ) ) {
+            tablesToUpdate.add( tableId );
+            listeners.firePropertyChange( "tablesToUpdate", null, tableId );
         }
     }
 
 
+    //use cache if possible
+    public void tablesToUpdate( Long tableId, HashMap<Long, List<Object>> changedValues, String type ) {
+        Catalog catalog = Catalog.getInstance();
+        CatalogTable catalogTable = catalog.getTable( tableId );
+        List<Long> columns = catalogTable.columnIds;
+        if ( type.equals( "INSERT" ) ) {
+            if ( this.statisticSchemaMap.get( catalogTable.schemaId ) != null ) {
+                if ( this.statisticSchemaMap.get( catalogTable.schemaId ).get( tableId ) != null ) {
+                    for ( Long column : columns ) {
+                        if ( this.statisticSchemaMap.get( catalogTable.schemaId ).get( tableId ).get( column ) != null ) {
+
+                        }
+                    }
+
+                } else {
+                    for ( int i = 0; i < columns.size(); i++ ) {
+                        PolyType polyType = catalog.getColumn( columns.get( i ) ).type;
+                        QueryColumn queryColumn = new QueryColumn( catalogTable.schemaId, catalogTable.id, columns.get( i ), polyType );
+
+                        if ( polyType.getFamily() == PolyTypeFamily.NUMERIC ) {
+                            NumericalStatisticColumn numericalStatisticColumn = new NumericalStatisticColumn<>( queryColumn );
+                            numericalStatisticColumn.insert( changedValues.get( (long) i ) );
+                            put( queryColumn, numericalStatisticColumn );
+                        } else if ( polyType.getFamily() == PolyTypeFamily.CHARACTER ) {
+                            AlphabeticStatisticColumn alphabeticStatisticColumn = new AlphabeticStatisticColumn<T>( queryColumn );
+                            alphabeticStatisticColumn.insert( (T) changedValues.get( (long) i ) );
+                            put( queryColumn, alphabeticStatisticColumn );
+                        } else if ( PolyType.DATETIME_TYPES.contains( polyType ) ) {
+                            TemporalStatisticColumn temporalStatisticColumn = new TemporalStatisticColumn<T>( queryColumn );
+                            temporalStatisticColumn.insert( (T) changedValues.get( (long) i ) );
+                            put( queryColumn, temporalStatisticColumn );
+                        }
+
+
+                    }
+                }
+            } else {
+
+            }
+
+        }
+
+/*
+        if ( !tablesToUpdate.contains( tableId ) ) {
+            tablesToUpdate.add( tableId );
+            listeners.firePropertyChange( "tablesToUpdate", null, tableId );
+        }
+
+ */
+    }
 
     /**
      * Registers if on configChange statistics are tracked and displayed or not
@@ -222,7 +271,7 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
             return;
         }
         log.debug( "Resetting StatisticManager." );
-        ConcurrentHashMap<String, HashMap<String, HashMap<String, StatisticColumn<T>>>> statisticSchemaMapCopy = new ConcurrentHashMap<>();
+        ConcurrentHashMap<Long, HashMap<Long, HashMap<Long, StatisticColumn<T>>>> statisticSchemaMapCopy = new ConcurrentHashMap<>();
 
         for ( QueryColumn column : this.sqlQueryInterface.getAllColumns() ) {
             StatisticColumn<T> col = reevaluateColumn( column );
@@ -246,38 +295,16 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
     /**
      * Gets a columns of a table and reevaluates them
      *
-     * @param qualifiedTable table name
+     * @param tableId id of table
      */
-    public void reevaluateTable( String qualifiedTable ) {
+    public void reevaluateTable( Long tableId ) {
         if ( this.sqlQueryInterface == null ) {
             return;
         }
-        long schemaId = 0;
+        if ( Catalog.getInstance().checkIfExistsTable( tableId ) ) {
+            deleteTable( Catalog.getInstance().getTable( tableId ).schemaId, tableId );
 
-        String[] splits = qualifiedTable.replace( "\"", "" ).split( "\\." );
-        if ( splits.length == 1 ) {
-            // default schema here
-            try {
-                splits = new String[]{ Catalog.getInstance().getDatabase( "APP" ).defaultSchemaName, splits[0] };
-                schemaId = Catalog.getInstance().getDatabase( "APP" ).id;
-            } catch ( UnknownDatabaseException e ) {
-                throw new RuntimeException( e );
-            }
-        } else if ( splits.length == 2 ) {
-            try {
-                schemaId = Catalog.getInstance().getSchema( 1, splits[0] ).id;
-            } catch ( UnknownSchemaException e ) {
-                e.printStackTrace();
-            }
-        }
-
-        if ( splits.length != 2 ) {
-            return;
-        }
-        deleteTable( splits[0], splits[1] );
-
-        if ( Catalog.getInstance().checkIfExistsTable( schemaId, splits[1] ) ) {
-            List<QueryColumn> res = this.sqlQueryInterface.getAllColumns( splits[0], splits[1] );
+            List<QueryColumn> res = this.sqlQueryInterface.getAllColumns( tableId );
 
             for ( QueryColumn column : res ) {
                 StatisticColumn<T> col = reevaluateColumn( column );
@@ -291,9 +318,9 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
     }
 
 
-    private void deleteTable( String schema, String table ) {
-        if ( this.statisticSchemaMap.get( schema ) != null ) {
-            this.statisticSchemaMap.get( schema ).remove( table );
+    private void deleteTable( Long schemaId, Long tableId ) {
+        if ( this.statisticSchemaMap.get( schemaId ) != null ) {
+            this.statisticSchemaMap.get( schemaId ).remove( tableId );
         }
     }
 
@@ -301,7 +328,7 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
     /**
      * replace the the tracked statistics with other statistics
      */
-    private synchronized void replaceStatistics( ConcurrentHashMap<String, HashMap<String, HashMap<String, StatisticColumn<T>>>> map ) {
+    private synchronized void replaceStatistics( ConcurrentHashMap<Long, HashMap<Long, HashMap<Long, StatisticColumn<T>>>> map ) {
         this.statisticSchemaMap = new ConcurrentHashMap<>( map );
     }
 
@@ -428,12 +455,12 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
 
 
     private void put( QueryColumn queryColumn, StatisticColumn<T> statisticColumn ) {
-        put( this.statisticSchemaMap, queryColumn.getSchema(), queryColumn.getTable(), queryColumn.getColumn(), statisticColumn );
+        put( this.statisticSchemaMap, queryColumn.getSchemaId(), queryColumn.getTableId(), queryColumn.getColumnId(), statisticColumn );
     }
 
 
-    private void put( ConcurrentHashMap<String, HashMap<String, HashMap<String, StatisticColumn<T>>>> statisticSchemaMapCopy, QueryColumn queryColumn, StatisticColumn<T> statisticColumn ) {
-        put( statisticSchemaMapCopy, queryColumn.getSchema(), queryColumn.getTable(), queryColumn.getColumn(), statisticColumn );
+    private void put( ConcurrentHashMap<Long, HashMap<Long, HashMap<Long, StatisticColumn<T>>>> statisticSchemaMapCopy, QueryColumn queryColumn, StatisticColumn<T> statisticColumn ) {
+        put( statisticSchemaMapCopy, queryColumn.getSchemaId(), queryColumn.getTableId(), queryColumn.getColumnId(), statisticColumn );
     }
 
 
@@ -443,15 +470,15 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
      * @param map which schemaMap should be used
      * @param statisticColumn the Column with its statistics
      */
-    private void put( ConcurrentHashMap<String, HashMap<String, HashMap<String, StatisticColumn<T>>>> map, String schema, String table, String column, StatisticColumn<T> statisticColumn ) {
-        if ( !map.containsKey( schema ) ) {
-            map.put( schema, new HashMap<>() );
+    private void put( ConcurrentHashMap<Long, HashMap<Long, HashMap<Long, StatisticColumn<T>>>> map, Long schemaId, Long tableId, Long columnId, StatisticColumn<T> statisticColumn ) {
+        if ( !map.containsKey( schemaId ) ) {
+            map.put( schemaId, new HashMap<>() );
         }
 
-        if ( !map.get( schema ).containsKey( table ) ) {
-            map.get( schema ).put( table, new HashMap<>() );
+        if ( !map.get( schemaId ).containsKey( tableId ) ) {
+            map.get( schemaId ).put( tableId, new HashMap<>() );
         }
-        map.get( schema ).get( table ).put( column, statisticColumn );
+        map.get( schemaId ).get( tableId ).put( columnId, statisticColumn );
 
     }
 
@@ -473,7 +500,6 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
         LogicalTableScan tableScan = getLogicalTableScan( queryColumn.getSchema(), queryColumn.getTable(), reader, cluster );
 
         for ( int i = 0; i < tableScan.getRowType().getFieldNames().size(); i++ ) {
-            //todo IG: check if right
             if ( tableScan.getRowType().getFieldNames().get( i ).equals( queryColumn.getColumn() ) ) {
                 LogicalProject logicalProject = LogicalProject.create(
                         tableScan,
@@ -716,6 +742,12 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
         InformationTable tableInformation = new InformationTable( tableGroup, Arrays.asList( "Table Name", "Row Count" ) );
         im.registerInformation( tableInformation );
 
+        InformationGroup cacheGroup = new InformationGroup( page, "Cache Information" );
+        im.addGroup( cacheGroup );
+
+        InformationTable cacheInformation = new InformationTable( tableGroup, Arrays.asList( "Column Name", "Cache Values Min", "Cache Values Max" ) );
+        im.registerInformation( cacheInformation );
+
         InformationGroup actionGroup = new InformationGroup( page, "Action" );
         im.addGroup( actionGroup );
         Action reevaluateAction = parameters -> {
@@ -731,11 +763,13 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
             alphabeticalInformation.reset();
             temporalInformation.reset();
             tableInformation.reset();
+            cacheInformation.reset();
             statisticSchemaMap.values().forEach( schema -> schema.values().forEach( table -> table.forEach( ( k, v ) -> {
                 if ( v instanceof NumericalStatisticColumn ) {
 
                     if ( ((NumericalStatisticColumn<T>) v).getMin() != null && ((NumericalStatisticColumn<T>) v).getMax() != null ) {
                         numericalInformation.addRow( v.getQualifiedColumnName(), ((NumericalStatisticColumn<T>) v).getMin().toString(), ((NumericalStatisticColumn<T>) v).getMax().toString() );
+                        cacheInformation.addRow( v.getQualifiedColumnName(), ((NumericalStatisticColumn<T>) v).minCache.toString(), ((NumericalStatisticColumn<T>) v).maxCache.toString() );
                     } else {
                         numericalInformation.addRow( v.getQualifiedColumnName(), "❌", "❌" );
                     }
@@ -770,11 +804,10 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
     }
 
 
-
     /**
      * Reevaluates all tables which received changes impacting their statistic data
      *
-     * @param changedTables all tables which got changed in a transaction
+     * all tables which got changed in a transaction
      */
      /*
     public void apply( List<String> changedTables ) {
@@ -803,11 +836,11 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
 
     private void workQueue() {
         while ( !this.tablesToUpdate.isEmpty() ) {
-            String table = this.tablesToUpdate.poll();
-            if ( !deletedTable.contains( table ) ) {
-                reevaluateTable( table );
+            Long tableId = this.tablesToUpdate.poll();
+            if ( !deletedTable.contains( tableId ) ) {
+                reevaluateTable( tableId );
             }
-            rowCountPerTable.remove( table );
+            rowCountPerTable.remove( tableId );
         }
     }
 

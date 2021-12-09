@@ -18,6 +18,7 @@ package org.polypheny.db.monitoring.statistic;
 
 
 import com.google.gson.annotations.Expose;
+import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -56,6 +57,7 @@ public class TemporalStatisticColumn<T extends Comparable<T>> extends StatisticC
     }
 
 
+
     @Override
     public void insert( T val ) {
         if ( uniqueValues.size() < RuntimeConfig.STATISTIC_BUFFER.getInteger() ) {
@@ -72,6 +74,14 @@ public class TemporalStatisticColumn<T extends Comparable<T>> extends StatisticC
             this.min = val;
         } else if ( val.compareTo( max ) > 0 ) {
             this.max = val;
+        }
+    }
+
+
+    @Override
+    public void insert( List<T> values ) {
+        for ( T val : values ) {
+            insert( val );
         }
     }
 

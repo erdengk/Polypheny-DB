@@ -18,6 +18,7 @@ package org.polypheny.db.monitoring.statistic;
 
 
 import com.google.gson.annotations.Expose;
+import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.polypheny.db.config.RuntimeConfig;
 
@@ -46,6 +47,14 @@ public class AlphabeticStatisticColumn<T extends Comparable<T>> extends Statisti
             }
         } else {
             isFull = true;
+        }
+    }
+
+
+    @Override
+    public void insert( List<T> values ) {
+        for ( T val : values ) {
+            insert( val );
         }
     }
 

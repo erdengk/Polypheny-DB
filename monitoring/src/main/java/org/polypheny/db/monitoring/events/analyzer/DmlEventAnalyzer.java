@@ -41,7 +41,7 @@ public class DmlEventAnalyzer {
                 .isSubQuery( dmlEvent.isSubQuery() )
                 .recordedTimestamp( dmlEvent.getRecordedTimestamp() )
                 .accessedPartitions( dmlEvent.getAccessedPartitions() )
-                .changedTables( dmlEvent.getChangedTables() )
+                .tableChanged( dmlEvent.isTableChanged() )
                 .rowsChanged( dmlEvent.getRowsChanged() )
                 .tableId( dmlEvent.getTableId() )
                 .isCommitted( dmlEvent.isCommitted() )

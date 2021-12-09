@@ -39,40 +39,23 @@ public class StatisticRepository implements MonitoringRepository {
     public void persistDataPoint( @NonNull MonitoringDataPoint dataPoint ) {
         StatisticsManager<?> statisticsManager = StatisticsManager.getInstance();
         if ( dataPoint.getPointType() == DataPointType.DML ) {
-            ((DmlDataPoint) dataPoint).getChangedTables().forEach( statisticsManager::addTablesToUpdate );
-
             DmlDataPoint dmlDataPoint = ((DmlDataPoint) dataPoint);
+            if ( dmlDataPoint.isTableChanged() && dmlDataPoint.getChangedVals() != null ) {
+                statisticsManager.tablesToUpdate( dmlDataPoint.getTableId(), dmlDataPoint.getChangedVals(), dmlDataPoint.getMonitoringType() );
+            } else if ( dmlDataPoint.isTableChanged() ) {
+                statisticsManager.tablesToUpdate( dmlDataPoint.getTableId() );
+            }
+
             Catalog catalog = Catalog.getInstance();
 
             if ( dmlDataPoint.isCommitted() && catalog.checkIfExistsTable( dmlDataPoint.getTableId() ) ) {
                 CatalogTable catalogTable = catalog.getTable( dmlDataPoint.getTableId() );
-                List<Long> columnes = catalogTable.columnIds;
                 String name = catalogTable.name;
 
                 if ( dmlDataPoint.getMonitoringType().equals( "INSERT" ) ) {
                     int added = dmlDataPoint.getRowsChanged();
                     statisticsManager.updateRowCountPerTable( name, added, true );
-                     /*
-                    for ( int i = 0; i < columnes.size(); i++ ) {
-                        int finalI = i;
-                        if ( statisticsManager.getStatCache().containsKey( columnes.get( finalI ) ) ) {
-                            ArrayList<StatInfo<? extends Comparable>> stats = statisticsManager.getStatCache().get( columnes.get( finalI ) );
-                            stats.forEach( v -> {
-                                if ( v.getColumnId() == columnes.get( finalI ) ) {
 
-                                    v.insert( dmlDataPoint.getChangedVals().get( Long.valueOf( finalI )) );
-                                }
-                            } );
-                        } else {
-                            ArrayList<StatInfo<? extends Comparable>> stats = new ArrayList<>();
-                            StatInfo<? extends Comparable> statInfo = new StatInfo<>( catalogTable.id, columnes.get( finalI ) );
-
-                            statInfo.insert( dmlDataPoint.getChangedVals().get( Long.valueOf( finalI ) ) );
-                            stats.add( statInfo );
-                            statisticsManager.getStatCache().put( columnes.get( finalI ), stats );
-                        }
-
-                    } */
 
                 } else if ( dmlDataPoint.getMonitoringType().equals( "DELETE" ) ) {
                     int deleted = dmlDataPoint.getRowsChanged();

@@ -31,10 +31,8 @@ import org.polypheny.db.catalog.Catalog.TableType;
 import org.polypheny.db.catalog.entity.CatalogColumn;
 import org.polypheny.db.catalog.entity.CatalogSchema;
 import org.polypheny.db.catalog.entity.CatalogTable;
-import org.polypheny.db.catalog.exceptions.UnknownColumnException;
 import org.polypheny.db.catalog.exceptions.UnknownDatabaseException;
 import org.polypheny.db.catalog.exceptions.UnknownSchemaException;
-import org.polypheny.db.catalog.exceptions.UnknownTableException;
 import org.polypheny.db.catalog.exceptions.UnknownUserException;
 import org.polypheny.db.config.RuntimeConfig;
 import org.polypheny.db.iface.Authenticator;
@@ -49,7 +47,6 @@ import org.polypheny.db.transaction.Transaction;
 import org.polypheny.db.transaction.Transaction.MultimediaFlavor;
 import org.polypheny.db.transaction.TransactionException;
 import org.polypheny.db.transaction.TransactionManager;
-import org.polypheny.db.type.PolyType;
 import org.polypheny.db.util.LimitIterator;
 
 
@@ -132,36 +129,37 @@ public class StatisticQueryProcessor {
     }
 
 
+    /*
     private List<QueryColumn> getAllColumns( String schemaTable ) {
         String[] split = schemaTable.split( "." );
         if ( split.length != 2 ) {
             return new ArrayList<>();
         }
-        return getAllColumns( split[0], split[1] );
+        return getAllColumns(  );
     }
+
+
+     */
 
 
     /**
      * Get all columns of a specific table
      *
-     * @param schemaName the name of the schema
-     * @param tableName the name of the table
+     * @param tableId the id of the table
      * @return all columns
      */
-    public List<QueryColumn> getAllColumns( String schemaName, String tableName ) {
+    public List<QueryColumn> getAllColumns( Long tableId ) {
         Catalog catalog = Catalog.getInstance();
 
         List<QueryColumn> columns = new ArrayList<>();
 
-        catalog
-                .getColumns( new Pattern( databaseName ), new Pattern( schemaName ), new Pattern( tableName ), null )
-                .forEach( c -> columns.add( QueryColumn.fromCatalogColumn( c ) ) );
+        catalog.getColumns( tableId ).forEach( c -> columns.add( QueryColumn.fromCatalogColumn( c ) ) );
 
         return columns;
 
     }
 
-
+/*
     public PolyType getColumnType( String schemaTableColumn ) {
         String[] splits = schemaTableColumn.split( "\\." );
         if ( splits.length != 3 ) {
@@ -170,10 +168,13 @@ public class StatisticQueryProcessor {
         return getColumnType( splits[0], splits[1], splits[2] );
     }
 
+ */
+
 
     /**
      * Method to get the type of a specific column
      */
+    /*
     public PolyType getColumnType( String schema, String table, String column ) {
         Catalog catalog = Catalog.getInstance();
         PolyType type = null;
@@ -185,7 +186,7 @@ public class StatisticQueryProcessor {
         }
         return type;
     }
-
+*/
 
     private StatisticResult executeRel( RelNode relNode, Transaction transaction, Statement statement, QueryColumn queryColumn ) {
 
