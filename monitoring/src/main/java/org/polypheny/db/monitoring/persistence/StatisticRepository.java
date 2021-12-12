@@ -20,7 +20,6 @@ import java.sql.Timestamp;
 import java.util.List;
 import lombok.NonNull;
 import org.polypheny.db.catalog.Catalog;
-import org.polypheny.db.catalog.entity.CatalogTable;
 import org.polypheny.db.monitoring.events.MonitoringDataPoint;
 import org.polypheny.db.monitoring.events.MonitoringDataPoint.DataPointType;
 import org.polypheny.db.monitoring.events.metrics.DmlDataPoint;
@@ -49,17 +48,15 @@ public class StatisticRepository implements MonitoringRepository {
             Catalog catalog = Catalog.getInstance();
 
             if ( dmlDataPoint.isCommitted() && catalog.checkIfExistsTable( dmlDataPoint.getTableId() ) ) {
-                CatalogTable catalogTable = catalog.getTable( dmlDataPoint.getTableId() );
-                String name = catalogTable.name;
 
                 if ( dmlDataPoint.getMonitoringType().equals( "INSERT" ) ) {
                     int added = dmlDataPoint.getRowsChanged();
-                    statisticsManager.updateRowCountPerTable( name, added, true );
+                    statisticsManager.updateRowCountPerTable( dmlDataPoint.getTableId(), added, true );
 
 
                 } else if ( dmlDataPoint.getMonitoringType().equals( "DELETE" ) ) {
                     int deleted = dmlDataPoint.getRowsChanged();
-                    statisticsManager.updateRowCountPerTable( name, deleted, false );
+                    statisticsManager.updateRowCountPerTable( dmlDataPoint.getTableId(), deleted, false );
 /*
                     for ( int i = 0; i < columnes.size(); i++ ) {
                         int finalI = i;
@@ -77,7 +74,7 @@ public class StatisticRepository implements MonitoringRepository {
                 }
 
                 if ( dmlDataPoint.isHasIndex() ) {
-                    statisticsManager.setIndexSize( name, dmlDataPoint.getIndexSize() );
+                    statisticsManager.setIndexSize( dmlDataPoint.getTableId(), dmlDataPoint.getIndexSize() );
                 }
 
 

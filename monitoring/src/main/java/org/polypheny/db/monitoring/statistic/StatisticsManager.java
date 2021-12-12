@@ -35,6 +35,7 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.math.NumberUtils;
+import org.polypheny.db.StatisticsHelper;
 import org.polypheny.db.catalog.Catalog;
 import org.polypheny.db.catalog.entity.CatalogTable;
 import org.polypheny.db.catalog.exceptions.GenericCatalogException;
@@ -105,9 +106,10 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
     Queue<Long> tablesToUpdate = new ConcurrentLinkedQueue<>();
     protected final PropertyChangeSupport listeners = new PropertyChangeSupport( this );
 
-    protected ConcurrentHashMap<String, Integer> rowCountPerTable = new ConcurrentHashMap<>();
+    @Getter
+    public ConcurrentHashMap<Long, Integer> rowCountPerTable = new ConcurrentHashMap<>();
 
-    private List<String> deletedTable = new ArrayList<>();
+    private List<Long> deletedTable = new ArrayList<>();
 
 
     private StatisticsManager() {
@@ -791,7 +793,9 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
                 }
 
             } ) ) );
-            rowCountPerTable.forEach( tableInformation::addRow );
+            rowCountPerTable.forEach( ( k, v ) -> {
+                tableInformation.addRow( Catalog.getInstance().getTable( k ).name, v );
+            } );
 
         } );
 
@@ -824,17 +828,17 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
     }
 
 
-    public void deleteTableToUpdate( String name ) {
-        deletedTable.add( name );
-        this.tablesToUpdate.remove( name );
-        rowCountPerTable.remove( name );
+    public void deleteTableToUpdate( Long tableId ) {
+        deletedTable.add( tableId );
+        this.tablesToUpdate.remove( tableId );
+        rowCountPerTable.remove( tableId );
     }
 
 
     private void workQueue() {
         while ( !this.tablesToUpdate.isEmpty() ) {
             Long tableId = this.tablesToUpdate.poll();
-            if ( !deletedTable.contains( tableId ) ) {
+            if ( Catalog.getInstance().checkIfExistsTable( tableId ) ) {
                 reevaluateTable( tableId );
             }
             rowCountPerTable.remove( tableId );
@@ -855,36 +859,41 @@ public class StatisticsManager<T extends Comparable<T>> implements PropertyChang
  */
 
 
-    public void updateRowCountPerTable( String name, int number, boolean isAdding ) {
+    public void updateRowCountPerTable( Long tableId, int number, boolean isAdding ) {
         if ( isAdding ) {
-            if ( rowCountPerTable.containsKey( name ) ) {
-                int totalRows = rowCountPerTable.remove( name ) + number;
-                rowCountPerTable.put( name, totalRows );
+            if ( rowCountPerTable.containsKey( tableId ) ) {
+                int totalRows = rowCountPerTable.remove( tableId ) + number;
+                rowCountPerTable.put( tableId, totalRows );
+                StatisticsHelper.getInstance().tableRowCount.put( tableId, totalRows );
             } else {
-                rowCountPerTable.put( name, number );
+                rowCountPerTable.put( tableId, number );
+                StatisticsHelper.getInstance().tableRowCount.put( tableId, number );
             }
         } else {
-            if ( rowCountPerTable.containsKey( name ) ) {
-                int totalRows = rowCountPerTable.remove( name ) - number;
-                rowCountPerTable.put( name, totalRows );
+            if ( rowCountPerTable.containsKey( tableId ) ) {
+                int totalRows = rowCountPerTable.remove( tableId ) - number;
+                rowCountPerTable.put( tableId, totalRows );
+                StatisticsHelper.getInstance().tableRowCount.put( tableId, number );
             } else {
-                rowCountPerTable.put( name, 0 );
+                rowCountPerTable.put( tableId, 0 );
+                StatisticsHelper.getInstance().tableRowCount.put( tableId, 0 );
             }
         }
+
     }
 
 
-    public void setIndexSize( String name, int indexSize ) {
-        if ( rowCountPerTable.containsKey( name ) ) {
-            int numberOfRows = rowCountPerTable.remove( name );
+    public void setIndexSize( Long tableId, int indexSize ) {
+        if ( rowCountPerTable.containsKey( tableId ) ) {
+            int numberOfRows = rowCountPerTable.remove( tableId );
             if ( numberOfRows == indexSize ) {
-                System.out.println( "it is the same!!!!" );
+                //empty on purpos
             } else {
                 //avg of the two rowcounts
-                rowCountPerTable.put( name, ((numberOfRows + indexSize) / 2) );
+                rowCountPerTable.put( tableId, ((numberOfRows + indexSize) / 2) );
             }
         } else {
-            rowCountPerTable.put( name, indexSize );
+            rowCountPerTable.put( tableId, indexSize );
         }
     }
 

@@ -54,7 +54,7 @@ public abstract class StatementEvent extends BaseEvent {
     protected boolean tableChanged;
     protected HashMap<String, Integer> rowCountPerTable = new HashMap<>();
     protected int rowsChanged;
-    protected long tableId;
+    protected Long tableId;
     protected boolean isCommitted;
     protected int indexSize;
     protected boolean hasIndex;
@@ -73,36 +73,6 @@ public abstract class StatementEvent extends BaseEvent {
 
     @Override
     public abstract List<MonitoringDataPoint> analyze();
-
-/*
-    public void addChangedTables( List<String> qualifiedTableName ) {
-        if ( !this.changedTables.contains( qualifiedTableName ) ) {
-            if ( log.isDebugEnabled() ) {
-                log.debug( "Add changed table: {}", qualifiedTableName );
-            }
-            String defaultSchemaName = "public.";
-            try {
-                defaultSchemaName = Catalog.getInstance().getDatabase( "APP" ).defaultSchemaName;
-            } catch ( UnknownDatabaseException e ) {
-                e.printStackTrace();
-            }
-
-            if ( !qualifiedTableName.isEmpty() ) {
-                String name = null;
-                if ( qualifiedTableName.size() == 2 ) {
-                    name = qualifiedTableName.get( 0 ) + "." + qualifiedTableName.get( 1 );
-                } else if ( qualifiedTableName.size() == 1 ) {
-                    name = defaultSchemaName + "." + qualifiedTableName.get( 0 );
-                }
-
-                this.changedTables.add( name );
-            }
-
-        }
-    }
-
-
- */
 
 
     public void addRowCountPerTable( String tableId, int tableSize ) {

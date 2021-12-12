@@ -225,6 +225,7 @@ public class RelMetadataQuery {
      * @return estimated row count, or null if no reliable estimate can be determined
      */
     public Double getRowCount( RelNode rel ) {
+
         for ( ; ; ) {
             try {
                 Double result = rowCountHandler.getRowCount( rel, this );

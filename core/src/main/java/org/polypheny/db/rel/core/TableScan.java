@@ -37,6 +37,7 @@ package org.polypheny.db.rel.core;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import org.polypheny.db.StatisticsHelper;
 import org.polypheny.db.plan.RelOptCluster;
 import org.polypheny.db.plan.RelOptCost;
 import org.polypheny.db.plan.RelOptPlanner;
@@ -52,6 +53,7 @@ import org.polypheny.db.rel.type.RelDataType;
 import org.polypheny.db.rel.type.RelDataTypeField;
 import org.polypheny.db.rex.RexBuilder;
 import org.polypheny.db.rex.RexNode;
+import org.polypheny.db.schema.LogicalTable;
 import org.polypheny.db.tools.RelBuilder;
 import org.polypheny.db.util.ImmutableBitSet;
 import org.polypheny.db.util.ImmutableIntList;
@@ -87,6 +89,15 @@ public abstract class TableScan extends AbstractRelNode {
 
     @Override
     public double estimateRowCount( RelMetadataQuery mq ) {
+        if ( table.getTable() instanceof LogicalTable ) {
+            if ( StatisticsHelper.getInstance().tableRowCount.get( ((LogicalTable) table.getTable()).getTableId() ) > 0 ) {
+                double rowCount = StatisticsHelper.getInstance().tableRowCount.get( ((LogicalTable) table.getTable()).getTableId() );
+                return rowCount;
+            }
+
+
+        }
+
         return table.getRowCount();
     }
 

@@ -1863,6 +1863,8 @@ public class DdlManagerImpl extends DdlManager {
                 store.createTable( statement.getPrepareContext(), catalogTable, catalogTable.partitionProperty.partitionIds );
             }
 
+            statement.getTransaction().getMonitoringData().setTableId( tableId );
+
         } catch ( GenericCatalogException | UnknownColumnException | UnknownCollationException e ) {
             throw new RuntimeException( e );
         }

@@ -69,7 +69,6 @@ import org.polypheny.db.sql.SqlLiteral;
 import org.polypheny.db.sql.SqlNode;
 import org.polypheny.db.sql.SqlNodeList;
 import org.polypheny.db.sql.SqlUtil;
-import org.polypheny.db.sql.ddl.SqlAlterTable;
 import org.polypheny.db.sql.ddl.SqlDropMaterializedView;
 import org.polypheny.db.sql.ddl.SqlDropTable;
 import org.polypheny.db.sql.ddl.SqlDropView;
@@ -247,7 +246,7 @@ public class SqlProcessorImpl implements SqlProcessor, ViewExpander {
 
     @Override
     public PolyphenyDbSignature<?> prepareDdl( Statement statement, SqlNode parsed ) {
-        extractStatistics( parsed );
+        extractStatistics( parsed, statement );
 
         if ( parsed instanceof SqlExecutableStatement ) {
             try {
@@ -257,6 +256,7 @@ public class SqlProcessorImpl implements SqlProcessor, ViewExpander {
                 ((SqlExecutableStatement) parsed).execute( statement.getPrepareContext(), statement );
                 statement.getTransaction().commit();
                 Catalog.getInstance().commit();
+
                 return new PolyphenyDbSignature<>(
                         parsed.toSqlString( PolyphenyDbSqlDialect.DEFAULT ).getSql(),
                         ImmutableList.of(),
@@ -284,28 +284,64 @@ public class SqlProcessorImpl implements SqlProcessor, ViewExpander {
     }
 
 
-    private void extractStatistics( SqlNode parsed ) {
+    private void extractStatistics( SqlNode parsed, Statement statement ) {
+
+        Long tableId = null;
         if ( parsed instanceof SqlDropTable ) {
             if ( ((SqlDropTable) parsed).getName().names.size() == 2 ) {
-                StatisticsManager.getInstance().deleteTableToUpdate( ((SqlDropTable) parsed).getName().names.get( 0 ) + "." + ((SqlDropTable) parsed).getName().names.get( 1 ) );
+                try {
+                    tableId = Catalog.getInstance().getTable( 1, ((SqlDropTable) parsed).getName().names.get( 0 ), ((SqlDropTable) parsed).getName().names.get( 1 ) ).id;
+                } catch ( UnknownTableException e ) {
+                    e.printStackTrace();
+                }
             } else if ( ((SqlDropTable) parsed).getName().names.size() == 1 ) {
-                StatisticsManager.getInstance().deleteTableToUpdate( "public." + ((SqlDropTable) parsed).getName().getSimple() );
+                try {
+                    tableId = Catalog.getInstance().getTable( 1, "public", ((SqlDropTable) parsed).getName().names.get( 1 ) ).id;
+                } catch ( UnknownTableException e ) {
+                    e.printStackTrace();
+                }
             }
+            StatisticsManager.getInstance().deleteTableToUpdate( tableId );
+            statement.getTransaction().getMonitoringData().setTableId( tableId );
+
         } else if ( parsed instanceof SqlDropView ) {
             if ( ((SqlDropView) parsed).getName().names.size() == 2 ) {
-                StatisticsManager.getInstance().deleteTableToUpdate( ((SqlDropView) parsed).getName().names.get( 0 ) + "." + ((SqlDropView) parsed).getName().names.get( 1 ) );
+
+                try {
+                    tableId = Catalog.getInstance().getTable( 1, ((SqlDropView) parsed).getName().names.get( 0 ), ((SqlDropView) parsed).getName().names.get( 1 ) ).id;
+                } catch ( UnknownTableException e ) {
+                    e.printStackTrace();
+                }
             } else if ( ((SqlDropView) parsed).getName().names.size() == 1 ) {
-                StatisticsManager.getInstance().deleteTableToUpdate( "public." + ((SqlDropView) parsed).getName().getSimple() );
+                try {
+                    tableId = Catalog.getInstance().getTable( 1, "public", ((SqlDropView) parsed).getName().names.get( 1 ) ).id;
+                } catch ( UnknownTableException e ) {
+                    e.printStackTrace();
+                }
             }
+
+            StatisticsManager.getInstance().deleteTableToUpdate( tableId );
+            statement.getTransaction().getMonitoringData().setTableId( tableId );
+
         } else if ( parsed instanceof SqlDropMaterializedView ) {
             if ( ((SqlDropMaterializedView) parsed).getName().names.size() == 2 ) {
-                StatisticsManager.getInstance().deleteTableToUpdate( ((SqlDropMaterializedView) parsed).getName().names.get( 0 ) + "." + ((SqlDropMaterializedView) parsed).getName().names.get( 1 ) );
+                try {
+                    tableId = Catalog.getInstance().getTable( 1, ((SqlDropMaterializedView) parsed).getName().names.get( 0 ), ((SqlDropMaterializedView) parsed).getName().names.get( 1 ) ).id;
+                } catch ( UnknownTableException e ) {
+                    e.printStackTrace();
+                }
             } else if ( ((SqlDropMaterializedView) parsed).getName().names.size() == 1 ) {
-                StatisticsManager.getInstance().deleteTableToUpdate( "public." + ((SqlDropMaterializedView) parsed).getName().getSimple() );
+                try {
+                    tableId = Catalog.getInstance().getTable( 1, "public", ((SqlDropMaterializedView) parsed).getName().names.get( 1 ) ).id;
+                } catch ( UnknownTableException e ) {
+                    e.printStackTrace();
+                }
             }
-        } else if ( parsed instanceof SqlAlterTable ) {
 
+            StatisticsManager.getInstance().deleteTableToUpdate( tableId );
+            statement.getTransaction().getMonitoringData().setTableId( tableId );
         }
+
     }
 
 
